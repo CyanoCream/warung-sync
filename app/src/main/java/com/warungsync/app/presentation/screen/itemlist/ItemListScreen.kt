@@ -51,6 +51,7 @@ import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.SyncStatus
 import com.warungsync.app.domain.model.Toko
+import com.warungsync.app.domain.model.formatUnitQuantity
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.components.ItemCard
 import com.warungsync.app.presentation.components.SearchAndFilterRow
@@ -213,7 +214,10 @@ fun ItemListScreen(
                         }
                     }
                     Text(
-                        text = "Rp %,d / %s".format(item.harga.toLong(), item.satuan),
+                        text = "Rp %,d / %s".format(
+                            item.harga.toLong(),
+                            formatUnitQuantity(item.unitQuantity, item.satuan)
+                        ),
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold

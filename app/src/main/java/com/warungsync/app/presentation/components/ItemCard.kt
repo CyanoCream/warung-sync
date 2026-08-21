@@ -4,9 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import com.warungsync.app.domain.model.Item
+import com.warungsync.app.domain.model.formatUnitQuantity
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -105,23 +104,11 @@ fun ItemCard(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "per ${item.satuan}",
+                        text = "per ${formatUnitQuantity(item.unitQuantity, item.satuan)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-
-            // Tampilkan deskripsi jika ada
-            if (!item.deskripsi.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = item.deskripsi,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }

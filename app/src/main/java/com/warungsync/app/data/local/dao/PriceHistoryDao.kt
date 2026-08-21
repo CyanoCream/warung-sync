@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PriceHistoryDao {
 
+    @Query("SELECT * FROM price_history WHERE id = :id LIMIT 1")
+    suspend fun getHistoryById(id: String): PriceHistoryEntity?
+
     @Query("SELECT * FROM price_history WHERE tokoId = :tokoId AND itemId = :itemId ORDER BY changedAt ASC")
     fun getHistoryForItem(tokoId: String, itemId: String): Flow<List<PriceHistoryEntity>>
 

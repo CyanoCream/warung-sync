@@ -35,6 +35,7 @@ data class ItemEntity(
     val deskripsi: String? = null,
     val harga: Double,
     val satuan: String,
+    val unitQuantity: Double = 1.0,
     val categoryId: String,
     val updatedAt: Long,
     val updatedByDevice: String,

@@ -13,6 +13,8 @@ import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SyncResult
 import com.warungsync.app.domain.repository.SyncRepository
 import com.warungsync.app.network.dto.SyncPayloadDto
+import com.warungsync.app.network.dto.TokoDto
+import com.warungsync.app.network.dto.TokoMemberDto
 
 class SyncRepositoryImpl(
     private val tokoDao: TokoDao,
@@ -22,6 +24,24 @@ class SyncRepositoryImpl(
     private val priceHistoryDao: PriceHistoryDao,
     private val prefs: DevicePreferences
 ) : SyncRepository {
+
+    override suspend fun saveJoinedToko(toko: TokoDto, member: TokoMemberDto): Result<Unit> {
+        return try {
+            require(member.tokoId == toko.id) { "Data member tidak cocok dengan toko" }
+            require(member.deviceId == prefs.deviceId) { "Identitas member tidak cocok dengan perangkat ini" }
+            require(member.isActive) { "Keanggotaan perangkat ini tidak aktif" }
+
+            // Toko dan member lokal harus tersedia sebelum UI berpindah halaman.
+            // getMyTokos() memakai INNER JOIN pada kedua tabel ini.
+            tokoDao.upsertToko(toko.toEntity())
+            tokoMemberDao.upsertMember(member.toEntity())
+            prefs.activeTokoId = toko.id
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save joined toko ${toko.id}", e)
+            Result.failure(e)
+        }
+    }
 
     override suspend fun createSyncPayload(tokoId: String, since: Long): SyncPayloadDto {
         val myRole = tokoMemberDao.getMyRole(tokoId, prefs.deviceId) ?: "USER"

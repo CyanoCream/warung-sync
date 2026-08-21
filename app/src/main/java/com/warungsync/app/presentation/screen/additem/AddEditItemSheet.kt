@@ -45,7 +45,7 @@ fun AddEditItemSheet(
     categories: List<Category>,
     editingItem: Item? = null,
     onDismiss: () -> Unit,
-    onSave: (nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit
+    onSave: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -53,6 +53,11 @@ fun AddEditItemSheet(
     var deskripsi by remember { mutableStateOf(editingItem?.deskripsi ?: "") }
     var hargaText by remember {
         mutableStateOf(editingItem?.harga?.toLong()?.toString()?.let(::formatThousandsInput) ?: "")
+    }
+    var unitQuantityText by remember {
+        mutableStateOf(editingItem?.unitQuantity?.let {
+            if (it % 1.0 == 0.0) it.toLong().toString() else it.toString()
+        } ?: "1")
     }
     var satuan by remember { mutableStateOf(editingItem?.satuan ?: "pcs") }
     var selectedCategoryId by remember {
@@ -139,29 +144,42 @@ fun AddEditItemSheet(
                 }
             }
 
-            // Harga & Satuan
+            // Harga
+            OutlinedTextField(
+                value = hargaText,
+                onValueChange = {
+                    hargaText = formatThousandsInput(it)
+                    errorMessage = null
+                },
+                label = { Text("Harga (Rp) *") },
+                placeholder = { Text("75.000") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // Jumlah/volume & satuan kemasan
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedTextField(
-                    value = hargaText,
+                    value = unitQuantityText,
                     onValueChange = {
-                        hargaText = formatThousandsInput(it)
+                        unitQuantityText = it.filter { char -> char.isDigit() || char == '.' || char == ',' }
                         errorMessage = null
                     },
-                    label = { Text("Harga (Rp) *") },
-                    placeholder = { Text("15.000") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1.2f),
+                    label = { Text("Jumlah/Volume *") },
+                    placeholder = { Text("5") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
                     singleLine = true
                 )
 
-                // Satuan Dropdown / Input
                 ExposedDropdownMenuBox(
                     expanded = satuanDropdownExpanded,
                     onExpandedChange = { satuanDropdownExpanded = !satuanDropdownExpanded },
-                    modifier = Modifier.weight(0.8f)
+                    modifier = Modifier.weight(1f)
                 ) {
                     OutlinedTextField(
                         value = satuan,
@@ -213,13 +231,15 @@ fun AddEditItemSheet(
                 Button(
                     onClick = {
                         val harga = parseThousandsInput(hargaText)
+                        val unitQuantity = unitQuantityText.replace(',', '.').toDoubleOrNull()
                         when {
                             namaBarang.isBlank() -> errorMessage = "Nama barang tidak boleh kosong"
                             selectedCategoryId.isBlank() -> errorMessage = "Pilih kategori terlebih dahulu"
                             harga == null || harga <= 0 -> errorMessage = "Harga harus berupa angka valid > 0"
+                            unitQuantity == null || unitQuantity <= 0 -> errorMessage = "Jumlah/volume harus lebih besar dari 0"
                             satuan.isBlank() -> errorMessage = "Satuan tidak boleh kosong"
                             else -> {
-                                onSave(namaBarang.trim(), deskripsi.trim().ifBlank { null }, harga, satuan.trim(), selectedCategoryId)
+                                onSave(namaBarang.trim(), deskripsi.trim().ifBlank { null }, harga, unitQuantity, satuan.trim(), selectedCategoryId)
                                 onDismiss()
                             }
                         }

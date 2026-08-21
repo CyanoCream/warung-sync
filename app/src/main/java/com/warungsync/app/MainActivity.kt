@@ -3,8 +3,11 @@ package com.warungsync.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,9 +20,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ListAlt
@@ -34,6 +40,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -44,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.warungsync.app.domain.model.MemberRole
@@ -67,6 +77,9 @@ import com.warungsync.app.presentation.viewmodel.MainViewModel
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AppDestination {
     ONBOARDING,
@@ -127,12 +140,33 @@ class MainActivity : ComponentActivity() {
                 val selectedItemForHistory by viewModel.selectedItemForHistory.collectAsState()
                 val priceHistories by viewModel.priceHistories.collectAsState()
                 val activeTokoMembers by viewModel.activeTokoMembers.collectAsState()
-                val discoveredPeers by viewModel.discoveredPeers.collectAsState()
+                val discoveredTokos by viewModel.discoveredTokos.collectAsState()
                 val isLoading by viewModel.isLoading.collectAsState()
                 val errorMessage by viewModel.errorMessage.collectAsState()
                 val trendCharts by viewModel.trendCharts.collectAsState()
                 val selectedTrendTimeframe by viewModel.selectedTrendTimeframe.collectAsState()
                 val customDateRange by viewModel.customDateRange.collectAsState()
+                val isDataTransferRunning by viewModel.isDataTransferRunning.collectAsState()
+                val dataTransferMessage by viewModel.dataTransferMessage.collectAsState()
+
+                val exportCsvLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("text/csv")
+                ) { uri ->
+                    uri?.let(viewModel::exportCurrentToko)
+                }
+                val importCsvLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri ->
+                    uri?.let {
+                        if (myTokos.isEmpty()) {
+                            viewModel.restoreBackupAsFirstToko(it) {
+                                currentDestination = AppDestination.TOKO_DASHBOARD
+                            }
+                        } else {
+                            viewModel.importIntoCurrentToko(it)
+                        }
+                    }
+                }
 
                 // Logic 1: Auto open jika hanya 1 toko atau memiliki toko default aktif
                 var hasCheckedAutoOpen by remember { mutableStateOf(false) }
@@ -199,6 +233,18 @@ class MainActivity : ComponentActivity() {
                             onToggleAutoOpen = { enable -> viewModel.setAutoOpenDefaultToko(enable) },
                             onCreateTokoClick = { currentDestination = AppDestination.CREATE_TOKO },
                             onJoinTokoClick = { currentDestination = AppDestination.JOIN_TOKO },
+                            onRestoreBackupClick = {
+                                importCsvLauncher.launch(
+                                    arrayOf(
+                                        "text/csv",
+                                        "text/comma-separated-values",
+                                        "application/vnd.ms-excel",
+                                        "text/plain"
+                                    )
+                                )
+                            },
+                            isRestoringBackup = isDataTransferRunning,
+                            backupStatusMessage = dataTransferMessage,
                             onLeaveTokoClick = { tokoId -> viewModel.leaveToko(tokoId) }
                         )
                     }
@@ -219,14 +265,14 @@ class MainActivity : ComponentActivity() {
 
                     AppDestination.JOIN_TOKO -> {
                         JoinTokoScreen(
-                            discoveredPeers = discoveredPeers,
+                            discoveredTokos = discoveredTokos,
                             isLoading = isLoading,
                             statusMessage = errorMessage,
                             onBackClick = { currentDestination = AppDestination.TOKO_LIST },
-                            onRefreshClick = { viewModel.triggerManualSync() },
-                            onJoinPeerToko = { peer ->
-                                viewModel.joinPeerToko(peer) {
-                                    currentDestination = AppDestination.TOKO_LIST
+                            onRefreshClick = { viewModel.refreshDiscoveredTokos() },
+                            onJoinToko = { toko ->
+                                viewModel.joinPeerToko(toko) {
+                                    currentDestination = AppDestination.TOKO_DASHBOARD
                                 }
                             }
                         )
@@ -292,13 +338,35 @@ class MainActivity : ComponentActivity() {
                                 onPriceRangeChanged = { min, max -> viewModel.updatePriceRange(min, max) },
                                 onSortChanged = { viewModel.updateSortBy(it) },
                                 onSyncClick = { viewModel.triggerManualSync() },
+                                onExportData = {
+                                    val safeName = currentToko.namaToko
+                                        .replace(Regex("[^A-Za-z0-9_-]+"), "_")
+                                        .trim('_')
+                                        .ifBlank { "Toko" }
+                                        .take(40)
+                                    val date = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                                    exportCsvLauncher.launch("WarungSync_${safeName}_$date.csv")
+                                },
+                                onImportData = {
+                                    importCsvLauncher.launch(
+                                        arrayOf(
+                                            "text/csv",
+                                            "text/comma-separated-values",
+                                            "application/vnd.ms-excel",
+                                            "text/plain"
+                                        )
+                                    )
+                                },
+                                isDataTransferRunning = isDataTransferRunning,
+                                dataTransferMessage = dataTransferMessage,
+                                onDataTransferMessageShown = viewModel::clearDataTransferMessage,
                                 onBackToTokoList = { currentDestination = AppDestination.TOKO_LIST },
                                 onManageTokoClick = { currentDestination = AppDestination.TOKO_SETTINGS },
-                                onAddItem = { nama, deskripsi, harga, satuan, catId ->
-                                    viewModel.addItem(nama, deskripsi, harga, satuan, catId)
+                                onAddItem = { nama, deskripsi, harga, unitQuantity, satuan, catId ->
+                                    viewModel.addItem(nama, deskripsi, harga, unitQuantity, satuan, catId)
                                 },
-                                onUpdateItem = { id, nama, deskripsi, harga, satuan, catId ->
-                                    viewModel.updateItem(id, nama, deskripsi, harga, satuan, catId)
+                                onUpdateItem = { id, nama, deskripsi, harga, unitQuantity, satuan, catId ->
+                                    viewModel.updateItem(id, nama, deskripsi, harga, unitQuantity, satuan, catId)
                                 },
                                 onDeleteItem = { viewModel.deleteItem(it) },
                                 onAddCategory = { nama, color -> viewModel.addCategory(nama, color) },
@@ -347,10 +415,15 @@ fun TokoDashboard(
     onPriceRangeChanged: (Double?, Double?) -> Unit,
     onSortChanged: (com.warungsync.app.domain.model.SortBy) -> Unit,
     onSyncClick: () -> Unit,
+    onExportData: () -> Unit,
+    onImportData: () -> Unit,
+    isDataTransferRunning: Boolean,
+    dataTransferMessage: String?,
+    onDataTransferMessageShown: () -> Unit,
     onBackToTokoList: () -> Unit,
     onManageTokoClick: () -> Unit,
-    onAddItem: (nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
-    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
+    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
+    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
     onDeleteItem: (id: String) -> Unit,
     onAddCategory: (String, Int) -> Unit,
     onUpdateCategory: (id: String, String, Int) -> Unit,
@@ -363,6 +436,14 @@ fun TokoDashboard(
     var selectedSection by remember(currentToko.id) { mutableStateOf(StoreSection.CATALOG) }
     val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(dataTransferMessage) {
+        dataTransferMessage?.let { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
+            onDataTransferMessageShown()
+        }
+    }
 
     fun select(section: StoreSection) {
         selectedSection = section
@@ -379,6 +460,7 @@ fun TokoDashboard(
                         .fillMaxHeight()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(horizontal = 12.dp)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -419,7 +501,7 @@ fun TokoDashboard(
                             icon = { Icon(Icons.Default.Category, null) }
                         )
                     }
-                    Spacer(Modifier.weight(1f))
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     Text(
                         text = "Tema",
                         style = MaterialTheme.typography.labelMedium,
@@ -448,6 +530,30 @@ fun TokoDashboard(
                         },
                         icon = { Icon(Icons.Default.Sync, null) }
                     )
+                    NavigationDrawerItem(
+                        label = { Text(if (isDataTransferRunning) "Memproses data…" else "Export backup CSV") },
+                        selected = false,
+                        onClick = {
+                            if (!isDataTransferRunning) {
+                                onExportData()
+                                scope.launch { drawerState.close() }
+                            }
+                        },
+                        icon = { Icon(Icons.Default.FileDownload, null) }
+                    )
+                    if (canAccessAdminTabs) {
+                        NavigationDrawerItem(
+                            label = { Text("Import & gabungkan CSV") },
+                            selected = false,
+                            onClick = {
+                                if (!isDataTransferRunning) {
+                                    onImportData()
+                                    scope.launch { drawerState.close() }
+                                }
+                            },
+                            icon = { Icon(Icons.Default.FileUpload, null) }
+                        )
+                    }
                     if (currentToko.myRole == MemberRole.OWNER) {
                         NavigationDrawerItem(
                             label = { Text("Pengaturan toko") },
@@ -550,6 +656,13 @@ fun TokoDashboard(
                 }
             }
             }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            )
 
         }
     }

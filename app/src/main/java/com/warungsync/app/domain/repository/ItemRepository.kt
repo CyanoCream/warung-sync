@@ -13,6 +13,7 @@ interface ItemRepository {
         namaBarang: String,
         deskripsi: String?,
         harga: Double,
+        unitQuantity: Double,
         satuan: String,
         categoryId: String
     ): Result<Item>
@@ -23,6 +24,7 @@ interface ItemRepository {
         namaBarang: String,
         deskripsi: String?,
         harga: Double,
+        unitQuantity: Double,
         satuan: String,
         categoryId: String
     ): Result<Item>

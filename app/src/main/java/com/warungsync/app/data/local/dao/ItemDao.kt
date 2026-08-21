@@ -15,6 +15,7 @@ data class ItemWithCategoryName(
     val deskripsi: String?,
     val harga: Double,
     val satuan: String,
+    val unitQuantity: Double,
     val categoryId: String,
     val categoryName: String?,
     val categoryColorArgb: Int,
@@ -27,7 +28,7 @@ data class ItemWithCategoryName(
 interface ItemDao {
 
     @Query("""
-        SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, 
+        SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, i.unitQuantity,
                i.categoryId, c.namaKategori AS categoryName,
                COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
@@ -61,7 +62,7 @@ interface ItemDao {
     ): Flow<List<ItemWithCategoryName>>
 
     @Query("""
-        SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, 
+        SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, i.unitQuantity,
                i.categoryId, c.namaKategori AS categoryName,
                COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
@@ -73,6 +74,9 @@ interface ItemDao {
 
     @Query("SELECT * FROM items WHERE id = :id")
     suspend fun getRawItemById(id: String): ItemEntity?
+
+    @Query("SELECT * FROM items WHERE tokoId = :tokoId AND LOWER(namaBarang) = LOWER(:nama) LIMIT 1")
+    suspend fun getRawItemByName(tokoId: String, nama: String): ItemEntity?
 
     @Query("SELECT * FROM items WHERE tokoId = :tokoId AND updatedAt > :since")
     suspend fun getItemsModifiedSince(tokoId: String, since: Long): List<ItemEntity>

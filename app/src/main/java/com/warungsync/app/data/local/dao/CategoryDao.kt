@@ -19,8 +19,14 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE id = :id AND isDeleted = 0")
     suspend fun getCategoryById(id: String): CategoryEntity?
 
+    @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
+    suspend fun getRawCategoryById(id: String): CategoryEntity?
+
     @Query("SELECT * FROM categories WHERE tokoId = :tokoId AND LOWER(namaKategori) = LOWER(:nama) AND isDeleted = 0 LIMIT 1")
     suspend fun getCategoryByName(tokoId: String, nama: String): CategoryEntity?
+
+    @Query("SELECT * FROM categories WHERE tokoId = :tokoId AND LOWER(namaKategori) = LOWER(:nama) LIMIT 1")
+    suspend fun getRawCategoryByName(tokoId: String, nama: String): CategoryEntity?
 
     @Query("SELECT * FROM categories WHERE tokoId = :tokoId AND updatedAt > :since")
     suspend fun getCategoriesModifiedSince(tokoId: String, since: Long): List<CategoryEntity>

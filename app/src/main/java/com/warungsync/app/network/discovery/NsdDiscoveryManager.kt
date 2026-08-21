@@ -14,6 +14,13 @@ data class DiscoveredPeer(
     val port: Int
 )
 
+data class DiscoveredToko(
+    val tokoId: String,
+    val namaToko: String,
+    val ownerName: String,
+    val peer: DiscoveredPeer
+)
+
 class NsdDiscoveryManager(context: Context) {
 
     private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager

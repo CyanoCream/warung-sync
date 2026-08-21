@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.warungsync.app.auth.TotpManager
+import com.warungsync.app.data.backup.CsvBackupManager
 import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.data.local.WarungSyncDatabase
 import com.warungsync.app.data.repository.CategoryRepositoryImpl
@@ -50,6 +51,14 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE items ADD COLUMN unitQuantity REAL NOT NULL DEFAULT 1.0"
+        )
+    }
+}
+
 val appModule = module {
 
     // Preferences & Auth
@@ -63,7 +72,7 @@ val appModule = module {
             WarungSyncDatabase::class.java,
             "warungsync_database"
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -74,6 +83,9 @@ val appModule = module {
     single { get<WarungSyncDatabase>().categoryDao() }
     single { get<WarungSyncDatabase>().itemDao() }
     single { get<WarungSyncDatabase>().priceHistoryDao() }
+
+    // CSV backup / restore through Android's document picker.
+    single { CsvBackupManager(androidContext(), get(), get()) }
 
     // Repositories
     single<TokoRepository> { TokoRepositoryImpl(get(), get(), get()) }
@@ -134,6 +146,7 @@ val appModule = module {
             syncOrchestrator = get(),
             nsdManager = get(),
             syncClient = get(),
+            csvBackupManager = get(),
             prefs = get()
         )
     }

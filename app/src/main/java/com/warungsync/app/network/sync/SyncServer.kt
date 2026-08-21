@@ -111,7 +111,13 @@ class SyncServer(
                             tokoMemberDao.upsertMember(newMember)
                             newMember
                         } else {
-                            existingMember
+                            // A join ulang must restore an inactive membership and refresh
+                            // the device name while retaining its last assigned role.
+                            existingMember.copy(
+                                deviceName = request.deviceName,
+                                updatedAt = now,
+                                isActive = true
+                            ).also { tokoMemberDao.upsertMember(it) }
                         }
 
                         call.respond(

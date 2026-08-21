@@ -1,7 +1,9 @@
 package com.warungsync.app.presentation.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.warungsync.app.data.backup.CsvBackupManager
 import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.CustomDateRange
@@ -33,11 +35,15 @@ import com.warungsync.app.domain.usecase.toko.LeaveTokoUseCase
 import com.warungsync.app.domain.usecase.toko.UpdateMemberRoleUseCase
 import com.warungsync.app.domain.usecase.toko.UpdateNamaTokoUseCase
 import com.warungsync.app.network.discovery.DiscoveredPeer
+import com.warungsync.app.network.discovery.DiscoveredToko
 import com.warungsync.app.network.discovery.NsdDiscoveryManager
 import com.warungsync.app.network.sync.SyncClient
 import com.warungsync.app.network.sync.SyncOrchestrator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,8 +52,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -74,6 +83,7 @@ class MainViewModel(
     private val syncOrchestrator: SyncOrchestrator,
     private val nsdManager: NsdDiscoveryManager,
     private val syncClient: SyncClient,
+    private val csvBackupManager: CsvBackupManager,
     val prefs: DevicePreferences
 ) : ViewModel() {
 
@@ -208,6 +218,34 @@ class MainViewModel(
 
     // Discovered NSD peers for joining
     val discoveredPeers: StateFlow<List<DiscoveredPeer>> = nsdManager.discoveredPeers
+    private val discoveryRefreshVersion = MutableStateFlow(0)
+    val discoveredTokos: StateFlow<List<DiscoveredToko>> = combine(
+        discoveredPeers,
+        discoveryRefreshVersion
+    ) { peers, _ -> peers }
+        .mapLatest { peers ->
+            coroutineScope {
+                peers.map { peer ->
+                    async {
+                        val info = syncClient.fetchDeviceInfo(peer.hostAddress, peer.port).getOrNull()
+                            ?: return@async emptyList()
+                        if (info.deviceId == prefs.deviceId) return@async emptyList()
+
+                        info.servedTokos.map { toko ->
+                            DiscoveredToko(
+                                tokoId = toko.id,
+                                namaToko = toko.namaToko,
+                                ownerName = toko.ownerName,
+                                peer = peer
+                            )
+                        }
+                    }
+                }.awaitAll()
+                    .flatten()
+                    .distinctBy { it.tokoId }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // UI Loading & Messages
     private val _isLoading = MutableStateFlow(false)
@@ -215,6 +253,12 @@ class MainViewModel(
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private val _isDataTransferRunning = MutableStateFlow(false)
+    val isDataTransferRunning: StateFlow<Boolean> = _isDataTransferRunning.asStateFlow()
+
+    private val _dataTransferMessage = MutableStateFlow<String?>(null)
+    val dataTransferMessage: StateFlow<String?> = _dataTransferMessage.asStateFlow()
 
     val isSyncing: StateFlow<Boolean> = syncOrchestrator.isSyncing
     val lastSyncResult: StateFlow<String?> = syncOrchestrator.lastSyncResult
@@ -313,34 +357,111 @@ class MainViewModel(
     }
 
     // Join Toko via Peer
-    fun joinPeerToko(peer: DiscoveredPeer, onSuccess: () -> Unit) {
+    fun refreshDiscoveredTokos() {
+        discoveryRefreshVersion.update { it + 1 }
+    }
+
+    fun exportCurrentToko(uri: Uri) {
+        val toko = _activeToko.value ?: return
+        viewModelScope.launch {
+            _isDataTransferRunning.value = true
+            csvBackupManager.exportToko(toko.id, uri).fold(
+                onSuccess = { result ->
+                    _dataTransferMessage.value =
+                        "Backup ${result.itemCount} produk dan ${result.categoryCount} kategori tersimpan sebagai " +
+                        "${result.fileName} di lokasi yang kamu pilih."
+                },
+                onFailure = { error ->
+                    _dataTransferMessage.value = "Export gagal: ${error.message ?: "file tidak dapat dibuat"}"
+                }
+            )
+            _isDataTransferRunning.value = false
+        }
+    }
+
+    fun importIntoCurrentToko(uri: Uri) {
+        val toko = _activeToko.value ?: return
+        if (toko.myRole == MemberRole.USER) {
+            _dataTransferMessage.value = "Hanya OWNER atau ADMIN yang dapat mengimpor data."
+            return
+        }
+        viewModelScope.launch {
+            _isDataTransferRunning.value = true
+            csvBackupManager.importIntoToko(toko.id, uri).fold(
+                onSuccess = { result ->
+                    _dataTransferMessage.value =
+                        "Import ${result.fileName} selesai: ${result.insertedCount} data baru, " +
+                        "${result.updatedCount} diperbarui, ${result.skippedCount} dilewati karena sudah lebih baru."
+                },
+                onFailure = { error ->
+                    _dataTransferMessage.value = "Import gagal: ${error.message ?: "format file tidak valid"}"
+                }
+            )
+            _isDataTransferRunning.value = false
+        }
+    }
+
+    fun restoreBackupAsFirstToko(uri: Uri, onSuccess: () -> Unit) {
+        if (_activeToko.value != null) {
+            importIntoCurrentToko(uri)
+            return
+        }
+        viewModelScope.launch {
+            _isDataTransferRunning.value = true
+            val metadata = csvBackupManager.inspectBackup(uri).getOrElse { error ->
+                _dataTransferMessage.value = "Pemulihan gagal: ${error.message ?: "format file tidak valid"}"
+                _isDataTransferRunning.value = false
+                return@launch
+            }
+            val newToko = createTokoUseCase(metadata.sourceTokoName, null).getOrElse { error ->
+                _dataTransferMessage.value = "Pemulihan gagal: ${error.message ?: "toko tidak dapat dibuat"}"
+                _isDataTransferRunning.value = false
+                return@launch
+            }
+            selectToko(newToko)
+            csvBackupManager.importIntoToko(newToko.id, uri).fold(
+                onSuccess = { result ->
+                    _dataTransferMessage.value =
+                        "Backup ${result.fileName} dipulihkan: ${result.insertedCount} data masuk, " +
+                        "${result.updatedCount} diperbarui."
+                },
+                onFailure = { error ->
+                    _dataTransferMessage.value =
+                        "Toko sudah dibuat, tetapi import gagal: ${error.message}. Coba import ulang dari sidebar."
+                }
+            )
+            _isDataTransferRunning.value = false
+            onSuccess()
+        }
+    }
+
+    fun clearDataTransferMessage() {
+        _dataTransferMessage.value = null
+    }
+
+    fun joinPeerToko(target: DiscoveredToko, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
 
-            val infoResult = syncClient.fetchDeviceInfo(peer.hostAddress, peer.port)
-            if (infoResult.isFailure) {
-                _isLoading.value = false
-                _errorMessage.value = "Gagal menghubungi perangkat di ${peer.hostAddress}:${peer.port}"
-                return@launch
-            }
-
-            val servedTokos = infoResult.getOrNull()?.servedTokos ?: emptyList()
-            if (servedTokos.isEmpty()) {
-                _isLoading.value = false
-                _errorMessage.value = "Perangkat ini tidak menyajikan toko manapun"
-                return@launch
-            }
-
-            val targetToko = servedTokos.first()
-            val joinResult = syncClient.requestJoinToko(targetToko.id, peer.hostAddress, peer.port)
+            val joinResult = syncClient.requestJoinToko(
+                target.tokoId,
+                target.peer.hostAddress,
+                target.peer.port
+            )
             joinResult.fold(
                 onSuccess = { resp ->
-                    _isLoading.value = false
                     if (resp.success && resp.toko != null) {
-                        syncOrchestrator.triggerSync()
+                        // Await Room's joined-toko query so navigation can never see
+                        // a temporary empty list and show the create-store screen.
+                        val joinedToko = getMyTokosUseCase()
+                            .first { tokos -> tokos.any { it.id == resp.toko.id } }
+                            .first { it.id == resp.toko.id }
+                        selectToko(joinedToko)
+                        _isLoading.value = false
                         onSuccess()
                     } else {
+                        _isLoading.value = false
                         _errorMessage.value = resp.message
                     }
                 },
@@ -402,19 +523,19 @@ class MainViewModel(
     }
 
     // Item Operations
-    fun addItem(nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) {
+    fun addItem(nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            addItemUseCase(tokoId, nama, deskripsi, harga, satuan, categoryId).onFailure {
+            addItemUseCase(tokoId, nama, deskripsi, harga, unitQuantity, satuan, categoryId).onFailure {
                 _errorMessage.value = it.message
             }
         }
     }
 
-    fun updateItem(id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) {
+    fun updateItem(id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            updateItemUseCase(tokoId, id, nama, deskripsi, harga, satuan, categoryId).onFailure {
+            updateItemUseCase(tokoId, id, nama, deskripsi, harga, unitQuantity, satuan, categoryId).onFailure {
                 _errorMessage.value = it.message
             }
         }

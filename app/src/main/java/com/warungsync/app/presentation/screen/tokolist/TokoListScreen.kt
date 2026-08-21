@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Star
@@ -68,6 +69,9 @@ fun TokoListScreen(
     onToggleAutoOpen: (Boolean) -> Unit,
     onCreateTokoClick: () -> Unit,
     onJoinTokoClick: () -> Unit,
+    onRestoreBackupClick: () -> Unit,
+    isRestoringBackup: Boolean,
+    backupStatusMessage: String?,
     onLeaveTokoClick: (String) -> Unit
 ) {
     var tokoToLeave by remember { mutableStateOf<Toko?>(null) }
@@ -150,6 +154,27 @@ fun TokoListScreen(
                         OutlinedButton(onClick = onJoinTokoClick) {
                             Text("Gabung Toko")
                         }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onRestoreBackupClick,
+                        enabled = !isRestoringBackup
+                    ) {
+                        Icon(Icons.Default.FileUpload, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isRestoringBackup) "Memulihkan…" else "Pulihkan Backup CSV")
+                    }
+                    backupStatusMessage?.let { message ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (message.contains("gagal", ignoreCase = true)) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                        )
                     }
                 }
             }

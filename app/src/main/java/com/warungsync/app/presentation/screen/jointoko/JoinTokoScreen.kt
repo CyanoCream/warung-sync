@@ -40,18 +40,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.warungsync.app.network.discovery.DiscoveredPeer
-import com.warungsync.app.network.dto.TokoSummaryDto
+import com.warungsync.app.network.discovery.DiscoveredToko
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JoinTokoScreen(
-    discoveredPeers: List<DiscoveredPeer>,
+    discoveredTokos: List<DiscoveredToko>,
     isLoading: Boolean,
     statusMessage: String?,
     onBackClick: () -> Unit,
     onRefreshClick: () -> Unit,
-    onJoinPeerToko: (peer: DiscoveredPeer) -> Unit
+    onJoinToko: (toko: DiscoveredToko) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -119,7 +118,7 @@ fun JoinTokoScreen(
                 }
             }
 
-            if (discoveredPeers.isEmpty()) {
+            if (discoveredTokos.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -136,13 +135,13 @@ fun JoinTokoScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Mencari Perangkat Toko...",
+                            text = "Mencari Toko...",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Menunggu broadcast dari HP toko lain di jaringan WiFi yang sama.",
+                            text = "Membaca nama toko dari HP lain di jaringan WiFi yang sama.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -157,17 +156,17 @@ fun JoinTokoScreen(
                 ) {
                     item {
                         Text(
-                            text = "Perangkat Toko Ditemukan (${discoveredPeers.size})",
+                            text = "Toko Ditemukan (${discoveredTokos.size})",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
-                    items(discoveredPeers, key = { it.hostAddress + it.port }) { peer ->
+                    items(discoveredTokos, key = { it.tokoId }) { toko ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = !isLoading) { onJoinPeerToko(peer) },
+                                .clickable(enabled = !isLoading) { onJoinToko(toko) },
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surface
                             ),
@@ -193,12 +192,12 @@ fun JoinTokoScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = peer.serviceName,
+                                            text = toko.namaToko,
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "IP: ${peer.hostAddress}:${peer.port}",
+                                            text = "Pemilik: ${toko.ownerName}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -206,7 +205,7 @@ fun JoinTokoScreen(
                                 }
 
                                 Button(
-                                    onClick = { onJoinPeerToko(peer) },
+                                    onClick = { onJoinToko(toko) },
                                     enabled = !isLoading
                                 ) {
                                     Text("Gabung")

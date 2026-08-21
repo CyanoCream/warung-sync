@@ -70,6 +70,7 @@ import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.Toko
+import com.warungsync.app.domain.model.formatUnitQuantity
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.components.ItemCard
 import com.warungsync.app.presentation.components.SearchAndFilterRow
@@ -92,8 +93,8 @@ fun MasterDataScreen(
     onCategorySelected: (String?) -> Unit,
     onPriceRangeChanged: (Double?, Double?) -> Unit,
     onSortChanged: (SortBy) -> Unit,
-    onAddItem: (nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
-    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
+    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
+    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
     onDeleteItem: (id: String) -> Unit,
     onAddCategory: (String, Int) -> Unit,
     onUpdateCategory: (id: String, String, Int) -> Unit,
@@ -327,11 +328,11 @@ fun MasterDataScreen(
                 showAddItemSheet = false
                 itemToEdit = null
             },
-            onSave = { nama, deskripsi, harga, satuan, categoryId ->
+            onSave = { nama, deskripsi, harga, unitQuantity, satuan, categoryId ->
                 if (itemToEdit != null) {
-                    onUpdateItem(itemToEdit!!.id, nama, deskripsi, harga, satuan, categoryId)
+                    onUpdateItem(itemToEdit!!.id, nama, deskripsi, harga, unitQuantity, satuan, categoryId)
                 } else {
-                    onAddItem(nama, deskripsi, harga, satuan, categoryId)
+                    onAddItem(nama, deskripsi, harga, unitQuantity, satuan, categoryId)
                 }
             }
         )
@@ -542,7 +543,10 @@ fun MasterItemsTab(
                                     )
                                 }
                                 Text(
-                                    text = "Rp %,d per %s".format(item.harga.toLong(), item.satuan),
+                                    text = "Rp %,d per %s".format(
+                                        item.harga.toLong(),
+                                        formatUnitQuantity(item.unitQuantity, item.satuan)
+                                    ),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

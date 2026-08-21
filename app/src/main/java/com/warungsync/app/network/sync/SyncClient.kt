@@ -61,6 +61,28 @@ class SyncClient(
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }.body()
+
+            if (response.success) {
+                val toko = response.toko
+                    ?: return Result.failure(IllegalStateException("Respons toko dari perangkat pemilik tidak lengkap"))
+                val member = response.member
+                    ?: return Result.failure(IllegalStateException("Respons member dari perangkat pemilik tidak lengkap"))
+
+                val saveResult = syncRepository.saveJoinedToko(toko, member)
+                if (saveResult.isFailure) {
+                    return Result.failure(
+                        saveResult.exceptionOrNull()
+                            ?: IllegalStateException("Gagal menyimpan toko yang baru digabung")
+                    )
+                }
+
+                // Toko baru wajib menarik seluruh data sejak awal. Timestamp sync global
+                // dari toko lain tidak boleh membuat produk lama terlewat.
+                syncWithPeer(toko.id, peerIp, peerPort, since = 0L)
+                    .onFailure { error ->
+                        Log.w(TAG, "Joined toko ${toko.id}, but initial full sync will be retried later", error)
+                    }
+            }
             Result.success(response)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to join toko $tokoId on $peerIp", e)
@@ -68,14 +90,18 @@ class SyncClient(
         }
     }
 
-    suspend fun syncWithPeer(tokoId: String, peerIp: String, peerPort: Int = 8080): Result<SyncResult> {
+    suspend fun syncWithPeer(
+        tokoId: String,
+        peerIp: String,
+        peerPort: Int = 8080,
+        since: Long = prefs.lastSyncTimestamp
+    ): Result<SyncResult> {
         return try {
             Log.d(TAG, "Starting 2-way sync for toko $tokoId with peer $peerIp:$peerPort")
 
             // Step 1: PULL changes from peer
-            val lastSync = prefs.lastSyncTimestamp
             val remotePayload: SyncPayloadDto = client.get("http://$peerIp:$peerPort/sync/$tokoId") {
-                parameter("since", lastSync)
+                parameter("since", since)
             }.body()
 
             val pullResult = syncRepository.applySyncPayload(remotePayload)
@@ -84,7 +110,7 @@ class SyncClient(
             }
 
             // Step 2: PUSH local changes to peer
-            val localPayload = syncRepository.createSyncPayload(tokoId, lastSync)
+            val localPayload = syncRepository.createSyncPayload(tokoId, since)
             val pushResponse: SyncResult = client.post("http://$peerIp:$peerPort/sync/$tokoId") {
                 contentType(ContentType.Application.Json)
                 setBody(localPayload)

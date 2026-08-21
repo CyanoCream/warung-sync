@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.PriceHistory
+import com.warungsync.app.domain.model.formatUnitQuantity
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.theme.Emerald40
 import com.warungsync.app.presentation.theme.EmeraldBgLight
@@ -119,7 +120,7 @@ fun PriceHistoryScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Harga Sekarang: ${rupiahFormatter.format(currentItem.harga)} / ${currentItem.satuan}",
+                            text = "Harga Sekarang: ${rupiahFormatter.format(currentItem.harga)} / ${formatUnitQuantity(currentItem.unitQuantity, currentItem.satuan)}",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Emerald40

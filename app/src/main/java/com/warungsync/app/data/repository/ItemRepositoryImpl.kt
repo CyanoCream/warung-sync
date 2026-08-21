@@ -8,6 +8,7 @@ import com.warungsync.app.data.local.entity.ItemEntity
 import com.warungsync.app.data.local.entity.PriceHistoryEntity
 import com.warungsync.app.data.mapper.toDomain
 import com.warungsync.app.domain.model.Item
+import com.warungsync.app.domain.model.formatUnitQuantity
 import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.PriceHistory
 import com.warungsync.app.domain.repository.ItemRepository
@@ -44,6 +45,7 @@ class ItemRepositoryImpl(
         namaBarang: String,
         deskripsi: String?,
         harga: Double,
+        unitQuantity: Double,
         satuan: String,
         categoryId: String
     ): Result<Item> {
@@ -56,6 +58,9 @@ class ItemRepositoryImpl(
         }
         if (harga <= 0) {
             return Result.failure(IllegalArgumentException("Harga harus lebih besar dari 0"))
+        }
+        if (unitQuantity <= 0) {
+            return Result.failure(IllegalArgumentException("Jumlah/volume harus lebih besar dari 0"))
         }
         if (trimmedSatuan.isBlank()) {
             return Result.failure(IllegalArgumentException("Satuan tidak boleh kosong"))
@@ -74,6 +79,7 @@ class ItemRepositoryImpl(
             deskripsi = cleanDeskripsi,
             harga = harga,
             satuan = trimmedSatuan,
+            unitQuantity = unitQuantity,
             categoryId = categoryId,
             updatedAt = now,
             updatedByDevice = prefs.deviceId,
@@ -88,7 +94,7 @@ class ItemRepositoryImpl(
             hargaLama = 0.0,
             hargaBaru = harga,
             satuanLama = "-",
-            satuanBaru = trimmedSatuan,
+            satuanBaru = formatUnitQuantity(unitQuantity, trimmedSatuan),
             changedAt = now,
             changedByDevice = prefs.deviceId
         )
@@ -105,6 +111,7 @@ class ItemRepositoryImpl(
         namaBarang: String,
         deskripsi: String?,
         harga: Double,
+        unitQuantity: Double,
         satuan: String,
         categoryId: String
     ): Result<Item> {
@@ -117,6 +124,9 @@ class ItemRepositoryImpl(
         }
         if (harga <= 0) {
             return Result.failure(IllegalArgumentException("Harga harus lebih besar dari 0"))
+        }
+        if (unitQuantity <= 0) {
+            return Result.failure(IllegalArgumentException("Jumlah/volume harus lebih besar dari 0"))
         }
         if (trimmedSatuan.isBlank()) {
             return Result.failure(IllegalArgumentException("Satuan tidak boleh kosong"))
@@ -131,7 +141,9 @@ class ItemRepositoryImpl(
         val now = System.currentTimeMillis()
 
         // Catat history jika harga atau satuan berubah
-        val isPriceOrSatuanChanged = currentItem.harga != harga || currentItem.satuan != trimmedSatuan
+        val isPriceOrSatuanChanged = currentItem.harga != harga ||
+            currentItem.satuan != trimmedSatuan ||
+            currentItem.unitQuantity != unitQuantity
         if (isPriceOrSatuanChanged) {
             val historyEntity = PriceHistoryEntity(
                 id = UUID.randomUUID().toString(),
@@ -139,8 +151,8 @@ class ItemRepositoryImpl(
                 itemId = id,
                 hargaLama = currentItem.harga,
                 hargaBaru = harga,
-                satuanLama = currentItem.satuan,
-                satuanBaru = trimmedSatuan,
+                satuanLama = formatUnitQuantity(currentItem.unitQuantity, currentItem.satuan),
+                satuanBaru = formatUnitQuantity(unitQuantity, trimmedSatuan),
                 changedAt = now,
                 changedByDevice = prefs.deviceId
             )
@@ -152,6 +164,7 @@ class ItemRepositoryImpl(
             deskripsi = cleanDeskripsi,
             harga = harga,
             satuan = trimmedSatuan,
+            unitQuantity = unitQuantity,
             categoryId = categoryId,
             updatedAt = now,
             updatedByDevice = prefs.deviceId
