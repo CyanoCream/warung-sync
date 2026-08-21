@@ -523,19 +523,19 @@ class MainViewModel(
     }
 
     // Item Operations
-    fun addItem(nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) {
+    fun addItem(nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            addItemUseCase(tokoId, nama, deskripsi, harga, unitQuantity, satuan, categoryId).onFailure {
+            addItemUseCase(tokoId, nama, deskripsi, harga, unitQuantity, satuan, categoryIds).onFailure {
                 _errorMessage.value = it.message
             }
         }
     }
 
-    fun updateItem(id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) {
+    fun updateItem(id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            updateItemUseCase(tokoId, id, nama, deskripsi, harga, unitQuantity, satuan, categoryId).onFailure {
+            updateItemUseCase(tokoId, id, nama, deskripsi, harga, unitQuantity, satuan, categoryIds).onFailure {
                 _errorMessage.value = it.message
             }
         }

@@ -11,6 +11,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,17 +28,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +47,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -57,7 +56,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.ui.graphics.Color
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
@@ -65,15 +63,17 @@ import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.SyncStatus
 import com.warungsync.app.domain.model.Toko
-import com.warungsync.app.domain.model.formatUnitQuantity
+import com.warungsync.app.domain.model.TokoMember
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.components.ItemCard
+import com.warungsync.app.presentation.components.ItemDetailDialog
 import com.warungsync.app.presentation.components.SearchAndFilterRow
 import com.warungsync.app.presentation.components.SearchBar
+import com.warungsync.app.presentation.components.SpotlightSearch
+import com.warungsync.app.presentation.components.spotlightPullGesture
+import com.warungsync.app.presentation.components.wheelScrollMotion
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,11 +93,26 @@ fun ItemListScreen(
     onBackToTokoList: () -> Unit,
     onManageTokoClick: () -> Unit,
     onHistoryClick: (Item) -> Unit,
+    members: List<TokoMember> = emptyList(),
     showHeader: Boolean = true,
-    searchOnly: Boolean = false
+    searchOnly: Boolean = false,
+    wheelAnimationEnabled: Boolean = true
 ) {
     var selectedItemForDetail by remember { mutableStateOf<Item?>(null) }
+    var showSpotlightSearch by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
+    val focusFilteredResults = wheelAnimationEnabled && (
+        filter.searchQuery.isNotBlank() ||
+            filter.categoryId != null ||
+            filter.minHarga != null ||
+            filter.maxHarga != null
+        )
+
+    LaunchedEffect(focusFilteredResults, items.firstOrNull()?.id) {
+        if (focusFilteredResults && items.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
     val maxElasticOffset = with(LocalDensity.current) { 72.dp.toPx() }
     var elasticOffset by remember { mutableFloatStateOf(0f) }
     val elasticScrollConnection = remember(maxElasticOffset) {
@@ -200,11 +215,13 @@ fun ItemListScreen(
         ) {
             // Search Bar sejajar dengan Filter Popup Modal
             if (searchOnly) {
-                SearchBar(
-                    query = filter.searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                if (!wheelAnimationEnabled) {
+                    SearchBar(
+                        query = filter.searchQuery,
+                        onQueryChange = onSearchQueryChange,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
             } else {
                 SearchAndFilterRow(
                     searchQuery = filter.searchQuery,
@@ -240,44 +257,64 @@ fun ItemListScreen(
                     EmptyStateView()
                 }
             } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .nestedScroll(elasticScrollConnection)
-                        .graphicsLayer {
-                            val stretchFraction = if (size.height > 0) {
-                                abs(elasticOffset) / size.height
-                            } else {
-                                0f
-                            }
-                            translationY = elasticOffset * 0.75f
-                            scaleY = 1f + stretchFraction * 0.35f
-                            transformOrigin = TransformOrigin(
-                                pivotFractionX = 0.5f,
-                                pivotFractionY = if (elasticOffset >= 0f) 0f else 1f
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val focusedEdgePadding = maxOf(24.dp, maxHeight / 2 - 56.dp)
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (wheelAnimationEnabled) {
+                                    Modifier
+                                        .spotlightPullGesture(
+                                            listState = listState,
+                                            enabled = !showSpotlightSearch,
+                                            onOpen = { showSpotlightSearch = true }
+                                        )
+                                        .nestedScroll(elasticScrollConnection)
+                                        .graphicsLayer {
+                                            val stretchFraction = if (size.height > 0) {
+                                                abs(elasticOffset) / size.height
+                                            } else {
+                                                0f
+                                            }
+                                            translationY = elasticOffset * 0.75f
+                                            scaleY = 1f + stretchFraction * 0.35f
+                                            transformOrigin = TransformOrigin(
+                                                pivotFractionX = 0.5f,
+                                                pivotFractionY = if (elasticOffset >= 0f) 0f else 1f
+                                            )
+                                        }
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            top = if (wheelAnimationEnabled) focusedEdgePadding else 14.dp,
+                            end = 16.dp,
+                            bottom = if (wheelAnimationEnabled) focusedEdgePadding else 24.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            items = items,
+                            key = { it.id },
+                            contentType = { "product" }
+                        ) { item ->
+                            ItemCard(
+                                item = item,
+                                onItemClick = { selectedItemForDetail = item },
+                                modifier = Modifier.wheelScrollMotion(
+                                    listState = listState,
+                                    itemKey = item.id,
+                                    enabled = wheelAnimationEnabled
+                                ),
+                                onEditClick = null,
+                                onHistoryClick = { onHistoryClick(item) }
                             )
-                        },
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        top = 14.dp,
-                        end = 16.dp,
-                        bottom = 24.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
-                        items = items,
-                        key = { it.id },
-                        contentType = { "product" }
-                    ) { item ->
-                        ItemCard(
-                            item = item,
-                            onItemClick = { selectedItemForDetail = item },
-                            modifier = Modifier.productScrollMotion(listState, item.id),
-                            onEditClick = null,
-                            onHistoryClick = { onHistoryClick(item) }
-                        )
+                        }
                     }
                 }
             }
@@ -285,96 +322,23 @@ fun ItemListScreen(
     }
 
     selectedItemForDetail?.let { item ->
-        AlertDialog(
-            onDismissRequest = { selectedItemForDetail = null },
-            title = { Text(item.namaBarang, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    item.categoryName?.let { categoryName ->
-                        androidx.compose.material3.Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = Color(item.categoryColorArgb)
-                        ) {
-                            Text(
-                                text = categoryName,
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Rp %,d / %s".format(
-                            item.harga.toLong(),
-                            formatUnitQuantity(item.unitQuantity, item.satuan)
-                        ),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (!item.deskripsi.isNullOrBlank()) {
-                        Text(item.deskripsi, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    selectedItemForDetail = null
-                    onHistoryClick(item)
-                }) { Text("Riwayat harga") }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedItemForDetail = null }) { Text("Tutup") }
+        ItemDetailDialog(
+            item = item,
+            members = members,
+            onDismiss = { selectedItemForDetail = null },
+            onHistoryClick = {
+                selectedItemForDetail = null
+                onHistoryClick(item)
             }
         )
     }
-}
 
-private fun Modifier.productScrollMotion(
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    itemKey: String
-): Modifier = graphicsLayer {
-    val layoutInfo = listState.layoutInfo
-    val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey }
-    if (visibleItem == null || visibleItem.size <= 0) {
-        alpha = 0f
-        scaleX = 0.9f
-        scaleY = 0.9f
-    } else {
-        val visibleStart = max(visibleItem.offset, layoutInfo.viewportStartOffset)
-        val visibleEnd = min(
-            visibleItem.offset + visibleItem.size,
-            layoutInfo.viewportEndOffset
+    if (showSpotlightSearch) {
+        SpotlightSearch(
+            query = filter.searchQuery,
+            onQueryChange = onSearchQueryChange,
+            onDismiss = { showSpotlightSearch = false }
         )
-        val visibleFraction = ((visibleEnd - visibleStart).toFloat() / visibleItem.size)
-            .coerceIn(0f, 1f)
-        val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
-        val itemCenter = visibleItem.offset + visibleItem.size / 2f
-        val halfViewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / 2f
-        val normalizedDistance = if (halfViewport > 0f) {
-            (abs(itemCenter - viewportCenter) / halfViewport).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-
-        // Keep the middle steady, then progressively accentuate both screen edges.
-        // Smoothstep prevents a visible jump when a card enters the effect zone.
-        val distanceEffect = ((normalizedDistance - 0.20f) / 0.80f).coerceIn(0f, 1f)
-        val clippedEffect = (1f - visibleFraction).coerceIn(0f, 1f)
-        val rawEffect = max(distanceEffect, clippedEffect)
-        val smoothEffect = rawEffect * rawEffect * (3f - 2f * rawEffect)
-
-        alpha = 1f - 0.82f * smoothEffect
-        val scale = 1f - 0.28f * smoothEffect
-        scaleX = scale
-        scaleY = scale
-        translationY = when {
-            itemCenter < viewportCenter -> -visibleItem.size * 0.05f * smoothEffect
-            itemCenter > viewportCenter -> visibleItem.size * 0.05f * smoothEffect
-            else -> 0f
-        }
-        transformOrigin = TransformOrigin.Center
-        compositingStrategy = CompositingStrategy.ModulateAlpha
     }
 }
 

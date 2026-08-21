@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,6 +36,7 @@ import com.warungsync.app.domain.model.formatUnitQuantity
 import java.text.NumberFormat
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ItemCard(
     item: Item,
@@ -81,18 +84,44 @@ fun ItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    item.categoryName?.let { categoryName ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(item.categoryColorArgb),
-                            modifier = Modifier.padding(top = 4.dp)
+                    val categoryNames = item.categoryNames.ifEmpty {
+                        listOfNotNull(item.categoryName)
+                    }
+                    if (categoryNames.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Text(
-                                text = categoryName,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
+                            categoryNames.take(3).forEachIndexed { index, categoryName ->
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(
+                                        item.categoryColorsArgb.getOrNull(index)
+                                            ?: item.categoryColorArgb
+                                    )
+                                ) {
+                                    Text(
+                                        text = categoryName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            if (categoryNames.size > 3) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Text(
+                                        text = "+${categoryNames.size - 3}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

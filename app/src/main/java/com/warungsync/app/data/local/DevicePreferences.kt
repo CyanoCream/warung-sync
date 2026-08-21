@@ -54,6 +54,10 @@ class DevicePreferences(context: Context) {
         get() = prefs.getString(KEY_THEME_MODE, "SYSTEM") ?: "SYSTEM"
         set(value) = prefs.edit().putString(KEY_THEME_MODE, value).apply()
 
+    var wheelAnimationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WHEEL_ANIMATION_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_WHEEL_ANIMATION_ENABLED, value).apply()
+
     fun incrementCreatedTokoCount() {
         createdTokoCount = createdTokoCount + 1
     }
@@ -69,5 +73,6 @@ class DevicePreferences(context: Context) {
         private const val KEY_AUTO_OPEN_DEFAULT_TOKO = "key_auto_open_default_toko"
         private const val KEY_LAST_SYNC_TIMESTAMP = "key_last_sync_timestamp"
         private const val KEY_THEME_MODE = "key_theme_mode"
+        private const val KEY_WHEEL_ANIMATION_ENABLED = "key_wheel_animation_enabled"
     }
 }

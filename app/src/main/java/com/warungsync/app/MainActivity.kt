@@ -46,6 +46,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -106,6 +107,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             var themeMode by remember {
                 mutableStateOf(AppThemeMode.fromStored(devicePreferences.themeMode))
+            }
+            var wheelAnimationEnabled by remember {
+                mutableStateOf(devicePreferences.wheelAnimationEnabled)
             }
             val useDarkTheme = when (themeMode) {
                 AppThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -201,10 +205,10 @@ class MainActivity : ComponentActivity() {
                             currentDestination = AppDestination.TOKO_DASHBOARD
                         }
                         AppDestination.CREATE_TOKO,
-                        AppDestination.JOIN_TOKO,
-                        AppDestination.TOKO_DASHBOARD -> {
+                        AppDestination.JOIN_TOKO -> {
                             currentDestination = AppDestination.TOKO_LIST
                         }
+                        AppDestination.TOKO_DASHBOARD -> finish()
                         else -> {
                             currentDestination = AppDestination.TOKO_LIST
                         }
@@ -323,6 +327,7 @@ class MainActivity : ComponentActivity() {
                         activeToko?.let { currentToko ->
                             TokoDashboard(
                                 currentToko = currentToko,
+                                members = activeTokoMembers,
                                 items = items,
                                 allItems = allItems,
                                 categories = categories,
@@ -380,6 +385,11 @@ class MainActivity : ComponentActivity() {
                                     themeMode = mode
                                     devicePreferences.themeMode = mode.name
                                 },
+                                wheelAnimationEnabled = wheelAnimationEnabled,
+                                onWheelAnimationEnabledChange = { enabled ->
+                                    wheelAnimationEnabled = enabled
+                                    devicePreferences.wheelAnimationEnabled = enabled
+                                },
                                 onHistoryClick = { item ->
                                     viewModel.selectItemForHistory(item)
                                     currentDestination = AppDestination.PRICE_HISTORY
@@ -400,6 +410,7 @@ private enum class StoreSection { CATALOG, DASHBOARD, ITEMS, CATEGORIES }
 @Composable
 fun TokoDashboard(
     currentToko: Toko,
+    members: List<com.warungsync.app.domain.model.TokoMember>,
     items: List<com.warungsync.app.domain.model.Item>,
     allItems: List<com.warungsync.app.domain.model.Item>,
     categories: List<com.warungsync.app.domain.model.Category>,
@@ -425,14 +436,16 @@ fun TokoDashboard(
     onDataTransferMessageShown: () -> Unit,
     onBackToTokoList: () -> Unit,
     onManageTokoClick: () -> Unit,
-    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
-    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
+    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) -> Unit,
+    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) -> Unit,
     onDeleteItem: (id: String) -> Unit,
     onAddCategory: (String, Int) -> Unit,
     onUpdateCategory: (id: String, String, Int) -> Unit,
     onDeleteCategory: (id: String) -> Unit,
     themeMode: AppThemeMode,
     onThemeModeChange: (AppThemeMode) -> Unit,
+    wheelAnimationEnabled: Boolean,
+    onWheelAnimationEnabledChange: (Boolean) -> Unit,
     onHistoryClick: (com.warungsync.app.domain.model.Item) -> Unit
 ) {
     val canAccessAdminTabs = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
@@ -544,6 +557,24 @@ fun TokoDashboard(
                             }
                         }
                     }
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, top = 8.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Animasi",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        Switch(
+                            checked = wheelAnimationEnabled,
+                            onCheckedChange = onWheelAnimationEnabledChange
+                        )
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     if (canAccessAdminTabs) {
                         NavigationDrawerItem(
@@ -634,8 +665,10 @@ fun TokoDashboard(
                 onBackToTokoList = onBackToTokoList,
                 onManageTokoClick = onManageTokoClick,
                 onHistoryClick = onHistoryClick,
+                members = members,
                 showHeader = false,
-                searchOnly = true
+                searchOnly = true,
+                wheelAnimationEnabled = wheelAnimationEnabled
             ) }
             StoreSection.DASHBOARD -> {
                 if (canAccessAdminTabs) {
@@ -657,11 +690,53 @@ fun TokoDashboard(
                     selectedSection = StoreSection.CATALOG
                 }
             }
-            StoreSection.ITEMS, StoreSection.CATEGORIES -> {
+            StoreSection.ITEMS -> {
+                if (canAccessAdminTabs) {
+                    ProductFilterDrawer(
+                        categories = categories,
+                        selectedCategoryId = filter.categoryId,
+                        minPrice = filter.minHarga,
+                        maxPrice = filter.maxHarga,
+                        currentSort = filter.sortBy,
+                        onCategorySelected = onCategorySelected,
+                        onPriceRangeChanged = onPriceRangeChanged,
+                        onSortChanged = onSortChanged
+                    ) {
+                        MasterDataScreen(
+                            currentToko = currentToko,
+                            members = members,
+                            items = items,
+                            dependencyItems = allItems,
+                            categories = categories,
+                            filter = filter,
+                            onSearchQueryChange = onSearchQueryChange,
+                            onCategorySelected = onCategorySelected,
+                            onPriceRangeChanged = onPriceRangeChanged,
+                            onSortChanged = onSortChanged,
+                            onAddItem = onAddItem,
+                            onUpdateItem = onUpdateItem,
+                            onDeleteItem = onDeleteItem,
+                            onAddCategory = onAddCategory,
+                            onUpdateCategory = onUpdateCategory,
+                            onDeleteCategory = onDeleteCategory,
+                            onHistoryClick = onHistoryClick,
+                            onBackToTokoList = onBackToTokoList,
+                            section = MasterDataSection.ITEMS,
+                            showHeader = false,
+                            wheelAnimationEnabled = wheelAnimationEnabled
+                        )
+                    }
+                } else {
+                    selectedSection = StoreSection.CATALOG
+                }
+            }
+            StoreSection.CATEGORIES -> {
                 if (canAccessAdminTabs) {
                     MasterDataScreen(
                         currentToko = currentToko,
+                        members = members,
                         items = items,
+                        dependencyItems = allItems,
                         categories = categories,
                         filter = filter,
                         onSearchQueryChange = onSearchQueryChange,
@@ -676,8 +751,9 @@ fun TokoDashboard(
                         onDeleteCategory = onDeleteCategory,
                         onHistoryClick = onHistoryClick,
                         onBackToTokoList = onBackToTokoList,
-                        section = if (selectedSection == StoreSection.ITEMS) MasterDataSection.ITEMS else MasterDataSection.CATEGORIES,
-                        showHeader = false
+                        section = MasterDataSection.CATEGORIES,
+                        showHeader = false,
+                        wheelAnimationEnabled = wheelAnimationEnabled
                     )
                 } else {
                     selectedSection = StoreSection.CATALOG

@@ -15,7 +15,7 @@ interface ItemRepository {
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item>
 
     suspend fun updateItem(
@@ -26,7 +26,7 @@ interface ItemRepository {
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item>
 
     suspend fun deleteItem(id: String): Result<Unit>

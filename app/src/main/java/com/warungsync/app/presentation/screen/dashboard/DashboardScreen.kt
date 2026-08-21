@@ -99,7 +99,9 @@ fun DashboardScreen(
     val filteredItemsCount = if (selectedCategoryForCount == null) {
         allItems.size
     } else {
-        allItems.count { it.categoryId == selectedCategoryForCount }
+        allItems.count { item ->
+            selectedCategoryForCount in item.categoryIds.ifEmpty { listOf(item.categoryId) }
+        }
     }
 
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale("id", "ID")) }
@@ -382,7 +384,9 @@ fun DashboardScreen(
                             )
                         )
                         categories.forEach { cat ->
-                            val count = allItems.count { it.categoryId == cat.id }
+                            val count = allItems.count { item ->
+                                cat.id in item.categoryIds.ifEmpty { listOf(item.categoryId) }
+                            }
                             FilterChip(
                                 selected = selectedCategoryForCount == cat.id,
                                 onClick = {
@@ -514,9 +518,12 @@ fun AddChartItemDialog(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(text = item.namaBarang, fontWeight = FontWeight.Bold)
-                                        item.categoryName?.let {
+                                        item.categoryNames
+                                            .ifEmpty { listOfNotNull(item.categoryName) }
+                                            .takeIf { it.isNotEmpty() }
+                                            ?.let {
                                             Text(
-                                                text = it,
+                                                text = it.joinToString(" • "),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )

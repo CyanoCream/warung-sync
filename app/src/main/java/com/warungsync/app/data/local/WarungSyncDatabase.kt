@@ -21,7 +21,7 @@ import com.warungsync.app.data.local.entity.TokoMemberEntity
         ItemEntity::class,
         PriceHistoryEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class WarungSyncDatabase : RoomDatabase() {

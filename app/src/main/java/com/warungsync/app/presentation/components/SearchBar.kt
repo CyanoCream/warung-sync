@@ -16,6 +16,10 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -28,8 +32,14 @@ fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String = "Cari...",
+    containerColor: Color? = null,
+    accentColor: Color? = null,
+    onSearchDone: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val resolvedContainerColor = containerColor ?: MaterialTheme.colorScheme.surface
+    val resolvedAccentColor = accentColor ?: MaterialTheme.colorScheme.primary
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -47,7 +57,7 @@ fun SearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.primary,
+                tint = resolvedAccentColor,
                 modifier = Modifier.size(20.dp)
             )
         },
@@ -63,11 +73,15 @@ fun SearchBar(
         },
         shape = RoundedCornerShape(16.dp),
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(
+            onSearch = { onSearchDone?.invoke() }
+        ),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            focusedBorderColor = resolvedAccentColor,
             unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            focusedContainerColor = resolvedContainerColor,
+            unfocusedContainerColor = resolvedContainerColor
         )
     )
 }

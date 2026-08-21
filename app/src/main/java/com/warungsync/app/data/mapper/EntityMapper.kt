@@ -57,34 +57,55 @@ fun CategoryEntity.toDto() = CategoryDto(
     isDeleted = isDeleted
 )
 
-fun ItemEntity.toDomain(categoryName: String? = null) = Item(
-    id = id,
-    tokoId = tokoId,
-    namaBarang = namaBarang,
-    deskripsi = deskripsi,
-    harga = harga,
-    satuan = satuan,
-    unitQuantity = unitQuantity,
-    categoryId = categoryId,
-    categoryName = categoryName,
-    updatedAt = updatedAt,
-    updatedByDevice = updatedByDevice
-)
+fun ItemEntity.toDomain(categories: List<CategoryEntity> = emptyList()): Item {
+    val ids = normalizedCategoryIds(categoryId, categoryIdsCsv)
+    val categoryMap = categories.associateBy { it.id }
+    val matchedCategories = ids.mapNotNull(categoryMap::get)
+    return Item(
+        id = id,
+        tokoId = tokoId,
+        namaBarang = namaBarang,
+        deskripsi = deskripsi,
+        harga = harga,
+        satuan = satuan,
+        unitQuantity = unitQuantity,
+        categoryId = ids.first(),
+        categoryName = matchedCategories.firstOrNull()?.namaKategori,
+        categoryColorArgb = matchedCategories.firstOrNull()?.colorArgb ?: -11581723,
+        categoryIds = ids,
+        categoryNames = matchedCategories.map { it.namaKategori },
+        categoryColorsArgb = matchedCategories.map { it.colorArgb },
+        updatedAt = updatedAt,
+        updatedByDevice = updatedByDevice
+    )
+}
 
-fun ItemWithCategoryName.toDomain() = Item(
-    id = id,
-    tokoId = tokoId,
-    namaBarang = namaBarang,
-    deskripsi = deskripsi,
-    harga = harga,
-    satuan = satuan,
-    unitQuantity = unitQuantity,
-    categoryId = categoryId,
-    categoryName = categoryName,
-    categoryColorArgb = categoryColorArgb,
-    updatedAt = updatedAt,
-    updatedByDevice = updatedByDevice
-)
+fun ItemWithCategoryName.toDomain(categories: List<CategoryEntity> = emptyList()): Item {
+    val ids = normalizedCategoryIds(categoryId, categoryIdsCsv)
+    val categoryMap = categories.associateBy { it.id }
+    val matchedCategories = ids.mapNotNull(categoryMap::get)
+    val names = matchedCategories.map { it.namaKategori }
+        .ifEmpty { listOfNotNull(categoryName) }
+    val colors = matchedCategories.map { it.colorArgb }
+        .ifEmpty { if (categoryName != null) listOf(categoryColorArgb) else emptyList() }
+    return Item(
+        id = id,
+        tokoId = tokoId,
+        namaBarang = namaBarang,
+        deskripsi = deskripsi,
+        harga = harga,
+        satuan = satuan,
+        unitQuantity = unitQuantity,
+        categoryId = ids.first(),
+        categoryName = names.firstOrNull(),
+        categoryColorArgb = colors.firstOrNull() ?: categoryColorArgb,
+        categoryIds = ids,
+        categoryNames = names,
+        categoryColorsArgb = colors,
+        updatedAt = updatedAt,
+        updatedByDevice = updatedByDevice
+    )
+}
 
 fun Item.toEntity() = ItemEntity(
     id = id,
@@ -95,6 +116,10 @@ fun Item.toEntity() = ItemEntity(
     satuan = satuan,
     unitQuantity = unitQuantity,
     categoryId = categoryId,
+    categoryIdsCsv = normalizedCategoryIds(
+        primaryId = categoryId,
+        csv = categoryIds.joinToString(",")
+    ).joinToString(","),
     updatedAt = updatedAt,
     updatedByDevice = updatedByDevice
 )
@@ -108,6 +133,10 @@ fun ItemDto.toEntity() = ItemEntity(
     satuan = satuan,
     unitQuantity = unitQuantity,
     categoryId = categoryId,
+    categoryIdsCsv = normalizedCategoryIds(
+        primaryId = categoryId,
+        csv = categoryIds.joinToString(",")
+    ).joinToString(","),
     updatedAt = updatedAt,
     updatedByDevice = updatedByDevice,
     isDeleted = isDeleted
@@ -122,10 +151,17 @@ fun ItemEntity.toDto() = ItemDto(
     satuan = satuan,
     unitQuantity = unitQuantity,
     categoryId = categoryId,
+    categoryIds = normalizedCategoryIds(categoryId, categoryIdsCsv),
     updatedAt = updatedAt,
     updatedByDevice = updatedByDevice,
     isDeleted = isDeleted
 )
+
+private fun normalizedCategoryIds(primaryId: String, csv: String): List<String> =
+    csv.split(',')
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .let { ids -> (listOf(primaryId) + ids).filter(String::isNotBlank).distinct() }
 
 fun PriceHistoryEntity.toDomain() = PriceHistory(
     id = id,

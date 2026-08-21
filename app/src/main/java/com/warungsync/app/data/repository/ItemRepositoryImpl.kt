@@ -13,6 +13,7 @@ import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.PriceHistory
 import com.warungsync.app.domain.repository.ItemRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
@@ -24,20 +25,24 @@ class ItemRepositoryImpl(
 ) : ItemRepository {
 
     override fun getFilteredItems(tokoId: String, filter: ItemFilter): Flow<List<Item>> {
-        return itemDao.getFilteredItems(
+        return combine(
+            itemDao.getFilteredItems(
             tokoId = tokoId,
             searchQuery = filter.searchQuery.trim(),
             categoryId = filter.categoryId,
             minHarga = filter.minHarga,
             maxHarga = filter.maxHarga,
-            sortBy = filter.sortBy.name
-        ).map { entities ->
-            entities.map { it.toDomain() }
+                sortBy = filter.sortBy.name
+            ),
+            categoryDao.getAllCategories(tokoId)
+        ) { entities, categories ->
+            entities.map { it.toDomain(categories) }
         }
     }
 
     override suspend fun getItemById(id: String): Item? {
-        return itemDao.getItemById(id)?.toDomain()
+        val item = itemDao.getItemById(id) ?: return null
+        return item.toDomain(categoryDao.getAllCategoriesList(item.tokoId))
     }
 
     override suspend fun addItem(
@@ -47,7 +52,7 @@ class ItemRepositoryImpl(
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item> {
         val trimmedName = namaBarang.trim()
         val trimmedSatuan = satuan.trim()
@@ -66,8 +71,14 @@ class ItemRepositoryImpl(
             return Result.failure(IllegalArgumentException("Satuan tidak boleh kosong"))
         }
 
-        val category = categoryDao.getCategoryById(categoryId)
-            ?: return Result.failure(IllegalArgumentException("Kategori tidak valid"))
+        val selectedCategoryIds = categoryIds.distinct()
+        if (selectedCategoryIds.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Pilih minimal satu kategori"))
+        }
+        val categories = selectedCategoryIds.mapNotNull { categoryDao.getCategoryById(it) }
+        if (categories.size != selectedCategoryIds.size || categories.any { it.tokoId != tokoId }) {
+            return Result.failure(IllegalArgumentException("Kategori tidak valid"))
+        }
 
         val now = System.currentTimeMillis()
         val itemId = UUID.randomUUID().toString()
@@ -80,7 +91,8 @@ class ItemRepositoryImpl(
             harga = harga,
             satuan = trimmedSatuan,
             unitQuantity = unitQuantity,
-            categoryId = categoryId,
+            categoryId = selectedCategoryIds.first(),
+            categoryIdsCsv = selectedCategoryIds.joinToString(","),
             updatedAt = now,
             updatedByDevice = prefs.deviceId,
             isDeleted = false
@@ -102,7 +114,7 @@ class ItemRepositoryImpl(
         itemDao.upsertItem(itemEntity)
         priceHistoryDao.insertHistory(historyEntity)
 
-        return Result.success(itemEntity.toDomain(category.namaKategori))
+        return Result.success(itemEntity.toDomain(categories))
     }
 
     override suspend fun updateItem(
@@ -113,7 +125,7 @@ class ItemRepositoryImpl(
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item> {
         val trimmedName = namaBarang.trim()
         val trimmedSatuan = satuan.trim()
@@ -135,8 +147,14 @@ class ItemRepositoryImpl(
         val currentItem = itemDao.getRawItemById(id)
             ?: return Result.failure(NoSuchElementException("Barang tidak ditemukan"))
 
-        val category = categoryDao.getCategoryById(categoryId)
-            ?: return Result.failure(IllegalArgumentException("Kategori tidak valid"))
+        val selectedCategoryIds = categoryIds.distinct()
+        if (selectedCategoryIds.isEmpty()) {
+            return Result.failure(IllegalArgumentException("Pilih minimal satu kategori"))
+        }
+        val categories = selectedCategoryIds.mapNotNull { categoryDao.getCategoryById(it) }
+        if (categories.size != selectedCategoryIds.size || categories.any { it.tokoId != tokoId }) {
+            return Result.failure(IllegalArgumentException("Kategori tidak valid"))
+        }
 
         val now = System.currentTimeMillis()
 
@@ -165,13 +183,14 @@ class ItemRepositoryImpl(
             harga = harga,
             satuan = trimmedSatuan,
             unitQuantity = unitQuantity,
-            categoryId = categoryId,
+            categoryId = selectedCategoryIds.first(),
+            categoryIdsCsv = selectedCategoryIds.joinToString(","),
             updatedAt = now,
             updatedByDevice = prefs.deviceId
         )
 
         itemDao.upsertItem(updated)
-        return Result.success(updated.toDomain(category.namaKategori))
+        return Result.success(updated.toDomain(categories))
     }
 
     override suspend fun deleteItem(id: String): Result<Unit> {

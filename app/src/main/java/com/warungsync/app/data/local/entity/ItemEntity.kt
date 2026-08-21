@@ -37,6 +37,7 @@ data class ItemEntity(
     val satuan: String,
     val unitQuantity: Double = 1.0,
     val categoryId: String,
+    val categoryIdsCsv: String = categoryId,
     val updatedAt: Long,
     val updatedByDevice: String,
     val isDeleted: Boolean = false

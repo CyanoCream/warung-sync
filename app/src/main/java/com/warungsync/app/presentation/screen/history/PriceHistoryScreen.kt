@@ -104,7 +104,10 @@ fun PriceHistoryScreen(
                             color = EmeraldBgLight
                         ) {
                             Text(
-                                text = currentItem.categoryName ?: "Kategori",
+                                text = currentItem.categoryNames
+                                    .ifEmpty { listOfNotNull(currentItem.categoryName) }
+                                    .joinToString(" • ")
+                                    .ifBlank { "Kategori" },
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,

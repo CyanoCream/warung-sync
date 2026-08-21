@@ -1,10 +1,15 @@
 package com.warungsync.app.presentation.components
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,32 +42,32 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.warungsync.app.domain.model.Category
@@ -70,6 +75,7 @@ import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.presentation.util.formatThousandsInput
 import com.warungsync.app.presentation.util.parseThousandsInput
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -316,8 +322,25 @@ fun ProductFilterDrawer(
     onSortChanged: (SortBy) -> Unit,
     content: @Composable () -> Unit
 ) {
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val drawerProgress = remember { mutableFloatStateOf(0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    val drawerVisible by remember {
+        derivedStateOf { drawerProgress.floatValue > 0.001f }
+    }
+
+    fun settleDrawer(target: Float) {
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            animate(
+                initialValue = drawerProgress.floatValue,
+                targetValue = target,
+                animationSpec = tween(220)
+            ) { value, _ ->
+                drawerProgress.floatValue = value
+            }
+        }
+    }
     var tempCategory by remember(selectedCategoryId) { mutableStateOf(selectedCategoryId) }
     var tempMin by remember(minPrice) {
         mutableStateOf(minPrice?.toLong()?.toString()?.let(::formatThousandsInput) ?: "")
@@ -332,15 +355,115 @@ fun ProductFilterDrawer(
         onPriceRangeChanged(parseThousandsInput(tempMin), parseThousandsInput(tempMax))
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            // When closed, use the edge-only detector below so this nested
-            // drawer cannot steal the left drawer's gesture.
-            gesturesEnabled = drawerState.isOpen,
-            drawerContent = {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+    BackHandler(enabled = drawerVisible) {
+        settleDrawer(0f)
+    }
+
+    val density = LocalDensity.current
+    val maxDrawerWidthPx = with(density) { 300.dp.toPx() }
+    val edgeWidthPx = with(density) { 32.dp.toPx() }
+    val flingVelocityPx = with(density) { 500.dp.toPx() }
+    val touchSlop = LocalViewConfiguration.current.touchSlop
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(maxDrawerWidthPx, edgeWidthPx, touchSlop) {
+                val gestureDrawerWidthPx = minOf(maxDrawerWidthPx, size.width.toFloat())
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startedOpen = drawerProgress.floatValue > 0.001f
+                    if (!startedOpen && down.position.x < size.width - edgeWidthPx) {
+                        return@awaitEachGesture
+                    }
+
+                    settleJob?.cancel()
+                    val velocityTracker = VelocityTracker().apply {
+                        addPosition(down.uptimeMillis, down.position)
+                    }
+                    var lastPosition = down.position
+                    var totalX = 0f
+                    var totalY = 0f
+                    var dragging = false
+
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                            ?: event.changes.firstOrNull()
+                            ?: break
+                        velocityTracker.addPosition(change.uptimeMillis, change.position)
+
+                        val delta = change.position - lastPosition
+                        lastPosition = change.position
+                        totalX += delta.x
+                        totalY += delta.y
+
+                        if (!dragging) {
+                            if (kotlin.math.abs(totalY) > touchSlop &&
+                                kotlin.math.abs(totalY) > kotlin.math.abs(totalX)
+                            ) {
+                                break
+                            }
+                            if (kotlin.math.abs(totalX) > touchSlop &&
+                                kotlin.math.abs(totalX) > kotlin.math.abs(totalY)
+                            ) {
+                                if (!startedOpen && totalX > 0f) break
+                                dragging = true
+                            }
+                        }
+
+                        if (dragging) {
+                            change.consume()
+                            drawerProgress.floatValue =
+                                (drawerProgress.floatValue - delta.x / gestureDrawerWidthPx)
+                                    .coerceIn(0f, 1f)
+                        }
+
+                        if (!change.pressed) break
+                    }
+
+                    if (dragging) {
+                        val velocityX = velocityTracker.calculateVelocity().x
+                        val target = when {
+                            velocityX <= -flingVelocityPx -> 1f
+                            velocityX >= flingVelocityPx -> 0f
+                            drawerProgress.floatValue >= 0.5f -> 1f
+                            else -> 0f
+                        }
+                        settleDrawer(target)
+                    }
+                }
+            }
+    ) {
+        val drawerWidth = minOf(300.dp, maxWidth)
+        val drawerWidthPx = with(density) { drawerWidth.toPx() }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            content()
+        }
+
+        if (drawerVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = drawerProgress.floatValue * 0.32f
+                    }
+                    .background(MaterialTheme.colorScheme.scrim)
+                    .clickable {
+                        settleDrawer(0f)
+                    }
+            )
+        }
+
+        ModalDrawerSheet(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(drawerWidth)
+                .graphicsLayer {
+                    translationX = drawerWidthPx * (1f - drawerProgress.floatValue)
+                }
+        ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -442,42 +565,6 @@ fun ProductFilterDrawer(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                    }
-                }
-            }
-        ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(drawerState) {
-                            val edgeWidth = 32.dp.toPx()
-                            val openThreshold = 56.dp.toPx()
-                            awaitEachGesture {
-                                val down = awaitFirstDown(requireUnconsumed = false)
-                                if (down.position.x < size.width - edgeWidth) {
-                                    return@awaitEachGesture
-                                }
-
-                                var horizontalDrag = 0f
-                                var pointerPressed = true
-                                while (pointerPressed) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull() ?: break
-                                    horizontalDrag += change.positionChange().x
-                                    pointerPressed = change.pressed
-                                    if (horizontalDrag <= -openThreshold) {
-                                        change.consume()
-                                        scope.launch { drawerState.open() }
-                                        break
-                                    }
-                                }
-                            }
-                        }
-                ) {
-                    content()
-                }
-            }
         }
     }
 }

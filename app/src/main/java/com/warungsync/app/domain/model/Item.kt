@@ -11,6 +11,9 @@ data class Item(
     val categoryId: String,
     val categoryName: String? = null,
     val categoryColorArgb: Int = DEFAULT_CATEGORY_COLOR_ARGB,
+    val categoryIds: List<String> = emptyList(),
+    val categoryNames: List<String> = emptyList(),
+    val categoryColorsArgb: List<Int> = emptyList(),
     val updatedAt: Long,
     val updatedByDevice: String
 )

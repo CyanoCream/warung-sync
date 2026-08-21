@@ -23,6 +23,7 @@ data class ItemDto(
     val satuan: String,
     val unitQuantity: Double = 1.0,
     val categoryId: String,
+    val categoryIds: List<String> = emptyList(),
     val updatedAt: Long,
     val updatedByDevice: String,
     val isDeleted: Boolean = false

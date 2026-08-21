@@ -17,6 +17,7 @@ data class ItemWithCategoryName(
     val satuan: String,
     val unitQuantity: Double,
     val categoryId: String,
+    val categoryIdsCsv: String,
     val categoryName: String?,
     val categoryColorArgb: Int,
     val updatedAt: Long,
@@ -29,7 +30,7 @@ interface ItemDao {
 
     @Query("""
         SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, i.unitQuantity,
-               i.categoryId, c.namaKategori AS categoryName,
+               i.categoryId, i.categoryIdsCsv, c.namaKategori AS categoryName,
                COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
         FROM items i
@@ -41,7 +42,11 @@ interface ItemDao {
             OR LOWER(i.namaBarang) LIKE '%' || LOWER(:searchQuery) || '%'
             OR LOWER(COALESCE(i.deskripsi, '')) LIKE '%' || LOWER(:searchQuery) || '%'
           )
-          AND (:categoryId IS NULL OR i.categoryId = :categoryId)
+          AND (
+            :categoryId IS NULL
+            OR i.categoryId = :categoryId
+            OR (',' || i.categoryIdsCsv || ',') LIKE ('%,' || :categoryId || ',%')
+          )
           AND (:minHarga IS NULL OR i.harga >= :minHarga)
           AND (:maxHarga IS NULL OR i.harga <= :maxHarga)
         ORDER BY 
@@ -63,7 +68,7 @@ interface ItemDao {
 
     @Query("""
         SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, i.unitQuantity,
-               i.categoryId, c.namaKategori AS categoryName,
+               i.categoryId, i.categoryIdsCsv, c.namaKategori AS categoryName,
                COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
         FROM items i
@@ -84,7 +89,14 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE updatedAt > :since")
     suspend fun getAllItemsModifiedSinceGlobal(since: Long): List<ItemEntity>
 
-    @Query("SELECT COUNT(*) FROM items WHERE categoryId = :categoryId AND isDeleted = 0")
+    @Query("""
+        SELECT COUNT(*) FROM items
+        WHERE isDeleted = 0
+          AND (
+            categoryId = :categoryId
+            OR (',' || categoryIdsCsv || ',') LIKE ('%,' || :categoryId || ',%')
+          )
+    """)
     suspend fun countItemsByCategoryId(categoryId: String): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

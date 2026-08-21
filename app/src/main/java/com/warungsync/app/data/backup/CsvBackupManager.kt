@@ -106,6 +106,7 @@ class CsvBackupManager(
                                 "unit_quantity" to item.unitQuantity.toString(),
                                 "unit" to item.satuan,
                                 "category_id" to item.categoryId,
+                                "category_ids" to item.categoryIdsCsv.replace(',', '|'),
                                 "updated_at" to item.updatedAt.toString(),
                                 "updated_by_device" to item.updatedByDevice,
                                 "is_deleted" to item.isDeleted.toString()
@@ -213,13 +214,24 @@ class CsvBackupManager(
                         val name = row.required("name").trim()
                         val importedAt = row.requiredLong("updated_at")
                         val isDeleted = row.value("is_deleted").toBooleanStrictOrNull() ?: false
-                        val mappedCategoryId = categoryIdMap[row.required("category_id")]
-                        if (mappedCategoryId == null) {
+                        val sourceCategoryIds = row.value("category_ids")
+                            .split('|')
+                            .map(String::trim)
+                            .filter(String::isNotBlank)
+                            .ifEmpty { listOf(row.required("category_id")) }
+                            .distinct()
+                        val mappedCategoryIds = sourceCategoryIds.mapNotNull(categoryIdMap::get)
+                        if (mappedCategoryIds.size != sourceCategoryIds.size) {
                             skipped++
                             return@forEach
                         }
-                        val targetCategory = categoryDao.getRawCategoryById(mappedCategoryId)
-                        if (!isDeleted && (targetCategory == null || targetCategory.isDeleted)) {
+                        val targetCategories = mappedCategoryIds.mapNotNull {
+                            categoryDao.getRawCategoryById(it)
+                        }
+                        if (!isDeleted && (
+                                targetCategories.size != mappedCategoryIds.size ||
+                                    targetCategories.any { it.isDeleted }
+                                )) {
                             skipped++
                             return@forEach
                         }
@@ -243,7 +255,8 @@ class CsvBackupManager(
                             harga = row.requiredDouble("price"),
                             satuan = row.required("unit"),
                             unitQuantity = row.value("unit_quantity").toDoubleOrNull() ?: 1.0,
-                            categoryId = mappedCategoryId,
+                            categoryId = mappedCategoryIds.first(),
+                            categoryIdsCsv = mappedCategoryIds.joinToString(","),
                             updatedAt = importedAt,
                             updatedByDevice = row.value("updated_by_device").ifBlank { prefs.deviceId },
                             isDeleted = isDeleted
@@ -370,7 +383,7 @@ class CsvBackupManager(
         required(key).toDoubleOrNull() ?: error("Nilai $key tidak valid")
 
     companion object {
-        private const val FORMAT_VERSION = 1
+        private const val FORMAT_VERSION = 2
         private const val MAX_BACKUP_BYTES = 25L * 1024L * 1024L
         private const val DEFAULT_COLOR = -11581723
         private const val RECORD_META = "META"
@@ -391,6 +404,7 @@ class CsvBackupManager(
             "unit_quantity",
             "unit",
             "category_id",
+            "category_ids",
             "color_argb",
             "item_id",
             "old_price",

@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -45,7 +46,7 @@ fun AddEditItemSheet(
     categories: List<Category>,
     editingItem: Item? = null,
     onDismiss: () -> Unit,
-    onSave: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit
+    onSave: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -60,8 +61,13 @@ fun AddEditItemSheet(
         } ?: "1")
     }
     var satuan by remember { mutableStateOf(editingItem?.satuan ?: "pcs") }
-    var selectedCategoryId by remember {
-        mutableStateOf(editingItem?.categoryId ?: categories.firstOrNull()?.id ?: "")
+    var selectedCategoryIds by remember(editingItem?.id) {
+        mutableStateOf(
+            editingItem
+                ?.let { item -> item.categoryIds.ifEmpty { listOf(item.categoryId) } }
+                ?.toSet()
+                ?: emptySet()
+        )
     }
 
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
@@ -112,14 +118,16 @@ fun AddEditItemSheet(
                 maxLines = 4
             )
 
-            // Kategori Dropdown
+            // Kategori multi-select
             ExposedDropdownMenuBox(
                 expanded = categoryDropdownExpanded,
                 onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded }
             ) {
-                val selectedCategoryName = categories.find { it.id == selectedCategoryId }?.namaKategori ?: "Pilih Kategori"
+                val selectedCategoryNames = categories
+                    .filter { it.id in selectedCategoryIds }
+                    .joinToString(", ") { it.namaKategori }
                 OutlinedTextField(
-                    value = selectedCategoryName,
+                    value = selectedCategoryNames.ifBlank { "Pilih satu atau beberapa kategori" },
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Kategori *") },
@@ -135,9 +143,19 @@ fun AddEditItemSheet(
                     categories.forEach { category ->
                         DropdownMenuItem(
                             text = { Text(category.namaKategori) },
+                            leadingIcon = {
+                                Checkbox(
+                                    checked = category.id in selectedCategoryIds,
+                                    onCheckedChange = null
+                                )
+                            },
                             onClick = {
-                                selectedCategoryId = category.id
-                                categoryDropdownExpanded = false
+                                selectedCategoryIds = if (category.id in selectedCategoryIds) {
+                                    selectedCategoryIds - category.id
+                                } else {
+                                    selectedCategoryIds + category.id
+                                }
+                                errorMessage = null
                             }
                         )
                     }
@@ -234,12 +252,22 @@ fun AddEditItemSheet(
                         val unitQuantity = unitQuantityText.replace(',', '.').toDoubleOrNull()
                         when {
                             namaBarang.isBlank() -> errorMessage = "Nama barang tidak boleh kosong"
-                            selectedCategoryId.isBlank() -> errorMessage = "Pilih kategori terlebih dahulu"
+                            selectedCategoryIds.isEmpty() -> errorMessage = "Pilih minimal satu kategori"
                             harga == null || harga <= 0 -> errorMessage = "Harga harus berupa angka valid > 0"
                             unitQuantity == null || unitQuantity <= 0 -> errorMessage = "Jumlah/volume harus lebih besar dari 0"
                             satuan.isBlank() -> errorMessage = "Satuan tidak boleh kosong"
                             else -> {
-                                onSave(namaBarang.trim(), deskripsi.trim().ifBlank { null }, harga, unitQuantity, satuan.trim(), selectedCategoryId)
+                                val orderedCategoryIds = categories
+                                    .filter { it.id in selectedCategoryIds }
+                                    .map { it.id }
+                                onSave(
+                                    namaBarang.trim(),
+                                    deskripsi.trim().ifBlank { null },
+                                    harga,
+                                    unitQuantity,
+                                    satuan.trim(),
+                                    orderedCategoryIds
+                                )
                                 onDismiss()
                             }
                         }

@@ -24,13 +24,13 @@ class AddItemUseCase(
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item> {
         val role = tokoRepository.getMyRole(tokoId)
         if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
             return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menambah barang"))
         }
-        return itemRepository.addItem(tokoId, namaBarang, deskripsi, harga, unitQuantity, satuan, categoryId)
+        return itemRepository.addItem(tokoId, namaBarang, deskripsi, harga, unitQuantity, satuan, categoryIds)
     }
 }
 
@@ -46,13 +46,13 @@ class UpdateItemUseCase(
         harga: Double,
         unitQuantity: Double,
         satuan: String,
-        categoryId: String
+        categoryIds: List<String>
     ): Result<Item> {
         val role = tokoRepository.getMyRole(tokoId)
         if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
             return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat mengedit barang"))
         }
-        return itemRepository.updateItem(tokoId, id, namaBarang, deskripsi, harga, unitQuantity, satuan, categoryId)
+        return itemRepository.updateItem(tokoId, id, namaBarang, deskripsi, harga, unitQuantity, satuan, categoryIds)
     }
 }
 

@@ -93,9 +93,12 @@ fun PriceTrendCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    trendData.item.categoryName?.let {
+                    trendData.item.categoryNames
+                        .ifEmpty { listOfNotNull(trendData.item.categoryName) }
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
                         Text(
-                            text = it,
+                            text = it.joinToString(" • "),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +64,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,10 +75,15 @@ import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.Toko
+import com.warungsync.app.domain.model.TokoMember
 import com.warungsync.app.domain.model.formatUnitQuantity
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.components.ItemCard
-import com.warungsync.app.presentation.components.SearchAndFilterRow
+import com.warungsync.app.presentation.components.ItemDetailDialog
+import com.warungsync.app.presentation.components.SearchBar
+import com.warungsync.app.presentation.components.SpotlightSearch
+import com.warungsync.app.presentation.components.spotlightPullGesture
+import com.warungsync.app.presentation.components.wheelScrollMotion
 import com.warungsync.app.presentation.screen.additem.AddEditItemSheet
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
 import com.warungsync.app.presentation.theme.CategoryColorPalette
@@ -87,15 +96,17 @@ enum class MasterDataSection { BOTH, ITEMS, CATEGORIES }
 @Composable
 fun MasterDataScreen(
     currentToko: Toko,
+    members: List<TokoMember> = emptyList(),
     items: List<Item>,
+    dependencyItems: List<Item> = items,
     categories: List<Category>,
     filter: ItemFilter,
     onSearchQueryChange: (String) -> Unit,
     onCategorySelected: (String?) -> Unit,
     onPriceRangeChanged: (Double?, Double?) -> Unit,
     onSortChanged: (SortBy) -> Unit,
-    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
-    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryId: String) -> Unit,
+    onAddItem: (nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) -> Unit,
+    onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, unitQuantity: Double, satuan: String, categoryIds: List<String>) -> Unit,
     onDeleteItem: (id: String) -> Unit,
     onAddCategory: (String, Int) -> Unit,
     onUpdateCategory: (id: String, String, Int) -> Unit,
@@ -103,7 +114,8 @@ fun MasterDataScreen(
     onHistoryClick: (Item) -> Unit,
     onBackToTokoList: () -> Unit,
     section: MasterDataSection = MasterDataSection.BOTH,
-    showHeader: Boolean = true
+    showHeader: Boolean = true,
+    wheelAnimationEnabled: Boolean = true
 ) {
     val canEdit = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
 
@@ -270,12 +282,15 @@ fun MasterDataScreen(
                     onSortChanged = onSortChanged,
                     onEditItem = { itemToEdit = it },
                     onDeleteItem = { itemToDelete = it },
-                    onHistoryClick = onHistoryClick
+                    onHistoryClick = onHistoryClick,
+                    members = members,
+                    wheelAnimationEnabled = wheelAnimationEnabled
                 )
                 MasterDataSection.CATEGORIES -> MasterCategoriesTab(
                     categories = categories,
                     onEditCategory = { categoryToEdit = it },
-                    onDeleteCategory = { categoryToDelete = it }
+                    onDeleteCategory = { categoryToDelete = it },
+                    wheelAnimationEnabled = wheelAnimationEnabled
                 )
                 MasterDataSection.BOTH -> {
                     TabRow(selectedTabIndex = pagerState.currentPage) {
@@ -306,12 +321,15 @@ fun MasterDataScreen(
                         onSortChanged = onSortChanged,
                         onEditItem = { itemToEdit = it },
                         onDeleteItem = { itemToDelete = it },
-                        onHistoryClick = onHistoryClick
+                        onHistoryClick = onHistoryClick,
+                        members = members,
+                        wheelAnimationEnabled = wheelAnimationEnabled
                     )
                             1 -> MasterCategoriesTab(
                                 categories = categories,
                                 onEditCategory = { categoryToEdit = it },
-                                onDeleteCategory = { categoryToDelete = it }
+                                onDeleteCategory = { categoryToDelete = it },
+                                wheelAnimationEnabled = wheelAnimationEnabled
                             )
                         }
                     }
@@ -329,11 +347,11 @@ fun MasterDataScreen(
                 showAddItemSheet = false
                 itemToEdit = null
             },
-            onSave = { nama, deskripsi, harga, unitQuantity, satuan, categoryId ->
+            onSave = { nama, deskripsi, harga, unitQuantity, satuan, categoryIds ->
                 if (itemToEdit != null) {
-                    onUpdateItem(itemToEdit!!.id, nama, deskripsi, harga, unitQuantity, satuan, categoryId)
+                    onUpdateItem(itemToEdit!!.id, nama, deskripsi, harga, unitQuantity, satuan, categoryIds)
                 } else {
-                    onAddItem(nama, deskripsi, harga, unitQuantity, satuan, categoryId)
+                    onAddItem(nama, deskripsi, harga, unitQuantity, satuan, categoryIds)
                 }
             }
         )
@@ -454,7 +472,9 @@ fun MasterDataScreen(
 
     // Dialog Konfirmasi Hapus Kategori
     categoryToDelete?.let { category ->
-        val relatedItemCount = items.count { it.categoryId == category.id }
+        val relatedItemCount = dependencyItems.count { item ->
+            category.id in item.categoryIds.ifEmpty { listOf(item.categoryId) }
+        }
         val categoryIsUsed = relatedItemCount > 0
         AlertDialog(
             onDismissRequest = { categoryToDelete = null },
@@ -519,34 +539,79 @@ fun MasterItemsTab(
     onSortChanged: (SortBy) -> Unit,
     onEditItem: (Item) -> Unit,
     onDeleteItem: (Item) -> Unit,
-    onHistoryClick: (Item) -> Unit
+    onHistoryClick: (Item) -> Unit,
+    members: List<TokoMember>,
+    wheelAnimationEnabled: Boolean
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Search & Filter sejajar dengan modal popup
-        SearchAndFilterRow(
-            searchQuery = filter.searchQuery,
-            onSearchQueryChange = onSearchQueryChange,
-            categories = categories,
-            selectedCategoryId = filter.categoryId,
-            onCategorySelected = onCategorySelected,
-            minPrice = filter.minHarga,
-            maxPrice = filter.maxHarga,
-            onPriceRangeChanged = onPriceRangeChanged,
-            currentSort = filter.sortBy,
-            onSortChanged = onSortChanged
+    val listState = rememberLazyListState()
+    var showSpotlightSearch by remember { mutableStateOf(false) }
+    var selectedItemForDetail by remember { mutableStateOf<Item?>(null) }
+    val edgePadding = maxOf(
+        24.dp,
+        LocalConfiguration.current.screenHeightDp.dp / 2 - 92.dp
+    )
+    val focusFilteredResults = wheelAnimationEnabled && (
+        filter.searchQuery.isNotBlank() ||
+            filter.categoryId != null ||
+            filter.minHarga != null ||
+            filter.maxHarga != null
         )
+
+    LaunchedEffect(focusFilteredResults, items.firstOrNull()?.id) {
+        if (focusFilteredResults && items.isNotEmpty()) {
+            listState.scrollToItem(0)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (!wheelAnimationEnabled) {
+            SearchBar(
+                query = filter.searchQuery,
+                onQueryChange = onSearchQueryChange,
+                placeholder = "Cari barang…",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
 
         if (items.isEmpty()) {
             EmptyStateView()
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (wheelAnimationEnabled) {
+                            Modifier.spotlightPullGesture(
+                                listState = listState,
+                                enabled = !showSpotlightSearch,
+                                onOpen = { showSpotlightSearch = true }
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = if (wheelAnimationEnabled) edgePadding else 8.dp,
+                    end = 16.dp,
+                    bottom = if (wheelAnimationEnabled) edgePadding else 8.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(items, key = { it.id }) { item ->
+                items(
+                    items = items,
+                    key = { it.id },
+                    contentType = { "master_item" }
+                ) { item ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wheelScrollMotion(
+                                listState = listState,
+                                itemKey = item.id,
+                                enabled = wheelAnimationEnabled
+                            ),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surface
@@ -560,15 +625,23 @@ fun MasterItemsTab(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { selectedItemForDetail = item }
+                                    .padding(vertical = 4.dp)
+                            ) {
                                 Text(
                                     text = item.namaBarang,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                item.categoryName?.let { cat ->
+                                val categoryLabel = item.categoryNames
+                                    .ifEmpty { listOfNotNull(item.categoryName) }
+                                    .joinToString(" • ")
+                                if (categoryLabel.isNotBlank()) {
                                     Text(
-                                        text = cat,
+                                        text = categoryLabel,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(top = 2.dp)
@@ -608,25 +681,70 @@ fun MasterItemsTab(
             }
         }
     }
+
+    if (showSpotlightSearch) {
+        SpotlightSearch(
+            query = filter.searchQuery,
+            onQueryChange = onSearchQueryChange,
+            onDismiss = { showSpotlightSearch = false },
+            placeholder = "Cari barang…"
+        )
+    }
+
+    selectedItemForDetail?.let { item ->
+        ItemDetailDialog(
+            item = item,
+            members = members,
+            showUpdater = true,
+            onDismiss = { selectedItemForDetail = null },
+            onHistoryClick = {
+                selectedItemForDetail = null
+                onHistoryClick(item)
+            }
+        )
+    }
 }
 
 @Composable
 fun MasterCategoriesTab(
     categories: List<Category>,
     onEditCategory: (Category) -> Unit,
-    onDeleteCategory: (Category) -> Unit
+    onDeleteCategory: (Category) -> Unit,
+    wheelAnimationEnabled: Boolean
 ) {
+    val listState = rememberLazyListState()
+    val edgePadding = maxOf(
+        24.dp,
+        LocalConfiguration.current.screenHeightDp.dp / 2 - 72.dp
+    )
+
     if (categories.isEmpty()) {
         EmptyStateView()
     } else {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = if (wheelAnimationEnabled) edgePadding else 16.dp,
+                end = 16.dp,
+                bottom = if (wheelAnimationEnabled) edgePadding else 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(categories, key = { it.id }) { category ->
+            items(
+                items = categories,
+                key = { it.id },
+                contentType = { "category" }
+            ) { category ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wheelScrollMotion(
+                            listState = listState,
+                            itemKey = category.id,
+                            enabled = wheelAnimationEnabled
+                        ),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
