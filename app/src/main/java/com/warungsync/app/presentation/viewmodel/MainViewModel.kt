@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.domain.model.Category
+import com.warungsync.app.domain.model.CustomDateRange
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.ItemTrendData
@@ -129,6 +130,9 @@ class MainViewModel(
     private val _selectedTrendTimeframe = MutableStateFlow(TrendTimeframe.THIS_MONTH)
     val selectedTrendTimeframe: StateFlow<TrendTimeframe> = _selectedTrendTimeframe.asStateFlow()
 
+    private val _customDateRange = MutableStateFlow<CustomDateRange?>(null)
+    val customDateRange: StateFlow<CustomDateRange?> = _customDateRange.asStateFlow()
+
     private val _chartItemIds = MutableStateFlow<List<String>>(emptyList())
     val chartItemIds: StateFlow<List<String>> = _chartItemIds.asStateFlow()
 
@@ -136,23 +140,26 @@ class MainViewModel(
         _activeToko,
         allItems,
         _chartItemIds,
-        _selectedTrendTimeframe
-    ) { toko, itemsList, chartIds, timeframe ->
+        _selectedTrendTimeframe,
+        _customDateRange
+    ) { toko, itemsList, chartIds, timeframe, customRange ->
         if (toko == null || itemsList.isEmpty()) return@combine emptyList<ItemTrendData>()
 
         // Default: jika watchlist kosong, tampilkan hingga 3 barang pertama
         val targetIds = if (chartIds.isEmpty()) itemsList.take(3).map { it.id } else chartIds
         val targetItems = itemsList.filter { it.id in targetIds }
 
-        val cal = Calendar.getInstance()
-        val endTime = cal.timeInMillis
-        cal.add(Calendar.MONTH, -timeframe.monthsBack)
-        val startTime = cal.timeInMillis
+        val (startTime, endTime) = if (timeframe == TrendTimeframe.CUSTOM && customRange != null) {
+            Pair(customRange.startTimestamp, customRange.endTimestamp)
+        } else {
+            val cal = Calendar.getInstance()
+            val end = cal.timeInMillis
+            cal.add(Calendar.MONTH, -timeframe.monthsBack)
+            val start = cal.timeInMillis
+            Pair(start, end)
+        }
 
         targetItems.map { item ->
-            // Menghasilkan data tren langsung
-            val histFlow = getItemPriceTrendUseCase(toko.id, item, startTime, endTime)
-            // Ambil snapshot
             ItemTrendData(
                 item = item,
                 initialPrice = item.harga,
@@ -167,16 +174,22 @@ class MainViewModel(
         val itemsList = allItems.value
         val chartIds = _chartItemIds.value
         val timeframe = _selectedTrendTimeframe.value
+        val customRange = _customDateRange.value
 
         if (toko == null || itemsList.isEmpty()) return@flatMapLatest flowOf(emptyList())
 
         val targetIds = if (chartIds.isEmpty()) itemsList.take(3).map { it.id } else chartIds
         val targetItems = itemsList.filter { it.id in targetIds }
 
-        val cal = Calendar.getInstance()
-        val endTime = cal.timeInMillis
-        cal.add(Calendar.MONTH, -timeframe.monthsBack)
-        val startTime = cal.timeInMillis
+        val (startTime, endTime) = if (timeframe == TrendTimeframe.CUSTOM && customRange != null) {
+            Pair(customRange.startTimestamp, customRange.endTimestamp)
+        } else {
+            val cal = Calendar.getInstance()
+            val end = cal.timeInMillis
+            cal.add(Calendar.MONTH, -timeframe.monthsBack)
+            val start = cal.timeInMillis
+            Pair(start, end)
+        }
 
         val flows = targetItems.map { getItemPriceTrendUseCase(toko.id, it, startTime, endTime) }
         if (flows.isEmpty()) flowOf(emptyList())
@@ -330,10 +343,14 @@ class MainViewModel(
         _selectedTrendTimeframe.value = timeframe
     }
 
+    fun setCustomDateRange(startTimestamp: Long, endTimestamp: Long) {
+        _customDateRange.value = CustomDateRange(startTimestamp, endTimestamp)
+        _selectedTrendTimeframe.value = TrendTimeframe.CUSTOM
+    }
+
     fun addChartItem(item: Item) {
         val current = _chartItemIds.value.toMutableList()
         if (current.isEmpty()) {
-            // Jika sebelumnya default, populate dulu existing item ids
             val defaultIds = allItems.value.take(3).map { it.id }
             current.addAll(defaultIds)
         }

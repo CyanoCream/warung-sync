@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
                 val errorMessage by viewModel.errorMessage.collectAsState()
                 val trendCharts by viewModel.trendCharts.collectAsState()
                 val selectedTrendTimeframe by viewModel.selectedTrendTimeframe.collectAsState()
+                val customDateRange by viewModel.customDateRange.collectAsState()
 
                 when (currentDestination) {
                     AppDestination.ONBOARDING -> {
@@ -201,7 +202,9 @@ class MainActivity : ComponentActivity() {
                                 lastSyncResult = lastSyncResult,
                                 trendCharts = trendCharts,
                                 currentTimeframe = selectedTrendTimeframe,
+                                customDateRange = customDateRange,
                                 onTimeframeSelected = { viewModel.setTrendTimeframe(it) },
+                                onCustomRangeSelected = { start, end -> viewModel.setCustomDateRange(start, end) },
                                 onAddChartItem = { viewModel.addChartItem(it) },
                                 onRemoveChartItem = { viewModel.removeChartItem(it) },
                                 onSearchQueryChange = { viewModel.updateSearchQuery(it) },
@@ -247,7 +250,9 @@ fun TokoDashboard(
     lastSyncResult: String?,
     trendCharts: List<com.warungsync.app.domain.model.ItemTrendData>,
     currentTimeframe: com.warungsync.app.domain.model.TrendTimeframe,
+    customDateRange: com.warungsync.app.domain.model.CustomDateRange?,
     onTimeframeSelected: (com.warungsync.app.domain.model.TrendTimeframe) -> Unit,
+    onCustomRangeSelected: (Long, Long) -> Unit,
     onAddChartItem: (com.warungsync.app.domain.model.Item) -> Unit,
     onRemoveChartItem: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -320,7 +325,9 @@ fun TokoDashboard(
                         categories = categories,
                         trendCharts = trendCharts,
                         currentTimeframe = currentTimeframe,
+                        customRange = customDateRange,
                         onTimeframeSelected = onTimeframeSelected,
+                        onCustomRangeSelected = onCustomRangeSelected,
                         onAddChartItem = onAddChartItem,
                         onRemoveChartItem = onRemoveChartItem,
                         onBackToTokoList = onBackToTokoList
