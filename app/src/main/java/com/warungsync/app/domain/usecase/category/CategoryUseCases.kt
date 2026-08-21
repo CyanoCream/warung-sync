@@ -17,8 +17,8 @@ class AddCategoryUseCase(
 ) {
     suspend operator fun invoke(tokoId: String, namaKategori: String): Result<Category> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk menambah kategori"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menambah kategori"))
         }
         return categoryRepository.addCategory(tokoId, namaKategori)
     }
@@ -30,8 +30,8 @@ class UpdateCategoryUseCase(
 ) {
     suspend operator fun invoke(tokoId: String, id: String, namaKategori: String): Result<Category> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk mengedit kategori"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat mengedit kategori"))
         }
         return categoryRepository.updateCategory(tokoId, id, namaKategori)
     }
@@ -43,8 +43,8 @@ class DeleteCategoryUseCase(
 ) {
     suspend operator fun invoke(tokoId: String, id: String): Result<Unit> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk menghapus kategori"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menghapus kategori"))
         }
         return categoryRepository.deleteCategory(tokoId, id)
     }

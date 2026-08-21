@@ -18,6 +18,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -98,6 +99,25 @@ class MainActivity : ComponentActivity() {
                 val selectedTrendTimeframe by viewModel.selectedTrendTimeframe.collectAsState()
                 val customDateRange by viewModel.customDateRange.collectAsState()
 
+                // Logic 1: Auto open jika hanya 1 toko atau memiliki toko default aktif
+                var hasCheckedAutoOpen by remember { mutableStateOf(false) }
+                LaunchedEffect(myTokos) {
+                    if (!hasCheckedAutoOpen && prefs.isOnboardingCompleted && myTokos.isNotEmpty()) {
+                        hasCheckedAutoOpen = true
+                        if (myTokos.size == 1) {
+                            // Hanya punya 1 toko: langsung buka katalog toko tersebut
+                            viewModel.selectToko(myTokos.first())
+                            currentDestination = AppDestination.TOKO_DASHBOARD
+                        } else if (prefs.autoOpenDefaultToko && prefs.defaultTokoId != null) {
+                            val defaultToko = myTokos.find { it.id == prefs.defaultTokoId }
+                            if (defaultToko != null) {
+                                viewModel.selectToko(defaultToko)
+                                currentDestination = AppDestination.TOKO_DASHBOARD
+                            }
+                        }
+                    }
+                }
+
                 when (currentDestination) {
                     AppDestination.ONBOARDING -> {
                         OnboardingScreen(
@@ -112,11 +132,15 @@ class MainActivity : ComponentActivity() {
                         TokoListScreen(
                             tokos = myTokos,
                             activeTokoId = activeToko?.id,
+                            defaultTokoId = viewModel.defaultTokoId,
+                            autoOpenDefault = viewModel.autoOpenDefault,
                             deviceName = viewModel.deviceName,
                             onSelectToko = { toko ->
                                 viewModel.selectToko(toko)
                                 currentDestination = AppDestination.TOKO_DASHBOARD
                             },
+                            onSetDefaultToko = { tokoId -> viewModel.setDefaultToko(tokoId) },
+                            onToggleAutoOpen = { enable -> viewModel.setAutoOpenDefaultToko(enable) },
                             onCreateTokoClick = { currentDestination = AppDestination.CREATE_TOKO },
                             onJoinTokoClick = { currentDestination = AppDestination.JOIN_TOKO },
                             onLeaveTokoClick = { tokoId -> viewModel.leaveToko(tokoId) }

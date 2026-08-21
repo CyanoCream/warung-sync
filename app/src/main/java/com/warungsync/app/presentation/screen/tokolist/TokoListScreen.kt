@@ -15,14 +15,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Store
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -56,8 +60,12 @@ import com.warungsync.app.domain.model.Toko
 fun TokoListScreen(
     tokos: List<Toko>,
     activeTokoId: String?,
+    defaultTokoId: String?,
+    autoOpenDefault: Boolean,
     deviceName: String,
     onSelectToko: (Toko) -> Unit,
+    onSetDefaultToko: (String?) -> Unit,
+    onToggleAutoOpen: (Boolean) -> Unit,
     onCreateTokoClick: () -> Unit,
     onJoinTokoClick: () -> Unit,
     onLeaveTokoClick: (String) -> Unit
@@ -73,7 +81,7 @@ fun TokoListScreen(
                         Text(
                             text = "Perangkat: $deviceName",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
                         )
                     }
                 },
@@ -81,14 +89,15 @@ fun TokoListScreen(
                     IconButton(onClick = onJoinTokoClick) {
                         Icon(
                             imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = "Join Toko",
+                            contentDescription = "Gabung Toko via WiFi",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
@@ -152,6 +161,50 @@ fun TokoListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Pengaturan Toko Default jika punya lebih dari 1 toko
+                if (tokos.size > 1) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Buka Toko Utama Otomatis",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (defaultTokoId != null) {
+                                            val defaultName = tokos.find { it.id == defaultTokoId }?.namaToko ?: "Toko Utama"
+                                            "Langsung buka '$defaultName' saat app dijalankan"
+                                        } else {
+                                            "Tandai salah satu toko dengan bintang sebagai toko utama"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = autoOpenDefault && defaultTokoId != null,
+                                    onCheckedChange = { onToggleAutoOpen(it) },
+                                    enabled = defaultTokoId != null
+                                )
+                            }
+                        }
+                    }
+                }
+
                 item {
                     Text(
                         text = "Daftar Toko (${tokos.size})",
@@ -161,9 +214,16 @@ fun TokoListScreen(
                 }
 
                 items(tokos, key = { it.id }) { toko ->
+                    val isDefault = toko.id == defaultTokoId
                     TokoCard(
                         toko = toko,
                         isActive = toko.id == activeTokoId,
+                        isDefault = isDefault,
+                        showStar = tokos.size > 1,
+                        onToggleDefault = {
+                            if (isDefault) onSetDefaultToko(null)
+                            else onSetDefaultToko(toko.id)
+                        },
                         onOpenClick = { onSelectToko(toko) },
                         onLeaveClick = { tokoToLeave = toko }
                     )
@@ -203,6 +263,9 @@ fun TokoListScreen(
 fun TokoCard(
     toko: Toko,
     isActive: Boolean,
+    isDefault: Boolean,
+    showStar: Boolean,
+    onToggleDefault: () -> Unit,
     onOpenClick: () -> Unit,
     onLeaveClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -211,8 +274,9 @@ fun TokoCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpenClick),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            containerColor = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
             else MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -254,6 +318,16 @@ fun TokoCard(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (showStar) {
+                    IconButton(onClick = onToggleDefault) {
+                        Icon(
+                            imageVector = if (isDefault) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = "Jadikan Toko Utama",
+                            tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 if (toko.myRole != MemberRole.OWNER) {
                     IconButton(onClick = onLeaveClick) {
                         Icon(
@@ -295,7 +369,7 @@ fun RoleBadge(role: MemberRole) {
     }
 
     Surface(
-        shape = MaterialTheme.shapes.extraSmall,
+        shape = RoundedCornerShape(6.dp),
         color = bgColor
     ) {
         Text(

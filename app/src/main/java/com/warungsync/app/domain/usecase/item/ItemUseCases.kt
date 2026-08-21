@@ -26,8 +26,8 @@ class AddItemUseCase(
         categoryId: String
     ): Result<Item> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk menambah barang"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menambah barang"))
         }
         return itemRepository.addItem(tokoId, namaBarang, deskripsi, harga, satuan, categoryId)
     }
@@ -47,8 +47,8 @@ class UpdateItemUseCase(
         categoryId: String
     ): Result<Item> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk mengedit barang"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat mengedit barang"))
         }
         return itemRepository.updateItem(tokoId, id, namaBarang, deskripsi, harga, satuan, categoryId)
     }
@@ -60,8 +60,8 @@ class DeleteItemUseCase(
 ) {
     suspend operator fun invoke(tokoId: String, id: String): Result<Unit> {
         val role = tokoRepository.getMyRole(tokoId)
-        if (role == MemberRole.USER) {
-            return Result.failure(IllegalStateException("User biasa tidak memiliki izin untuk menghapus barang"))
+        if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
+            return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menghapus barang"))
         }
         return itemRepository.deleteItem(id)
     }

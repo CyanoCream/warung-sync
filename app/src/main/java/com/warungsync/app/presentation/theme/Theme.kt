@@ -8,27 +8,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = EmeraldLight,
-    secondary = EmeraldGrey80,
-    tertiary = Mint80,
-    background = CharcoalDark,
-    surface = CharcoalSurface,
-    onPrimary = Color.Black,
-    onSecondary = Color.Black,
-    onBackground = Color.White,
-    onSurface = Color.White
+    primary = IndigoPrimaryLight,
+    onPrimary = Color(0xFF0F172A),
+    primaryContainer = Color(0xFF1E3A8A),
+    onPrimaryContainer = Color(0xFFDBEAFE),
+
+    secondary = SlateSecondaryLight,
+    onSecondary = Color(0xFF0F172A),
+    secondaryContainer = Color(0xFF334155),
+    onSecondaryContainer = Color(0xFFF1F5F9),
+
+    background = BackgroundDark,
+    onBackground = TextPrimaryDark,
+    surface = SurfaceDark,
+    onSurface = TextPrimaryDark,
+    surfaceVariant = Color(0xFF334155),
+    onSurfaceVariant = TextSecondaryDark,
+
+    error = StatusDanger,
+    onError = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Emerald40,
-    secondary = EmeraldDark,
-    tertiary = EmeraldLight,
-    background = Color(0xFFF9FAFB),
-    surface = Color.White,
+    primary = IndigoPrimary,
     onPrimary = Color.White,
+    primaryContainer = IndigoBgSubtle,
+    onPrimaryContainer = Color(0xFF1E40AF),
+
+    secondary = SlateSecondary,
     onSecondary = Color.White,
-    onBackground = TextPrimary,
-    onSurface = TextPrimary
+    secondaryContainer = Color(0xFFF1F5F9),
+    onSecondaryContainer = Color(0xFF1E293B),
+
+    background = BackgroundLight,
+    onBackground = TextPrimaryLight,
+    surface = SurfaceLight,
+    onSurface = TextPrimaryLight,
+    surfaceVariant = Color(0xFFF1F5F9),
+    onSurfaceVariant = TextSecondaryLight,
+
+    error = StatusDanger,
+    onError = Color.White
 )
 
 @Composable

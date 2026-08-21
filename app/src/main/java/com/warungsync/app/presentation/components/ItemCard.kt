@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -25,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.warungsync.app.domain.model.Item
 import java.text.NumberFormat
 import java.util.Locale
@@ -46,6 +50,7 @@ fun ItemCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onItemClick),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -59,7 +64,7 @@ fun ItemCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -73,7 +78,7 @@ fun ItemCard(
 
                     item.categoryName?.let { categoryName ->
                         Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
@@ -87,21 +92,31 @@ fun ItemCard(
                     }
                 }
 
-                Text(
-                    text = "${rupiahFormat.format(item.harga)} / ${item.satuan}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
+                // Format Harga Besar & Jelas untuk orang tua
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(start = 12.dp)
+                ) {
+                    Text(
+                        text = rupiahFormat.format(item.harga),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "per ${item.satuan}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Tampilkan deskripsi jika ada
             if (!item.deskripsi.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = item.deskripsi,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -110,7 +125,7 @@ fun ItemCard(
 
             // Action Buttons
             if (onEditClick != null || onDeleteClick != null || onHistoryClick != null) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,

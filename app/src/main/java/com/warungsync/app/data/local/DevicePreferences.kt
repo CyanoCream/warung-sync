@@ -38,6 +38,14 @@ class DevicePreferences(context: Context) {
         get() = prefs.getString(KEY_ACTIVE_TOKO_ID, null)
         set(value) = prefs.edit().putString(KEY_ACTIVE_TOKO_ID, value).apply()
 
+    var defaultTokoId: String?
+        get() = prefs.getString(KEY_DEFAULT_TOKO_ID, null)
+        set(value) = prefs.edit().putString(KEY_DEFAULT_TOKO_ID, value).apply()
+
+    var autoOpenDefaultToko: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_OPEN_DEFAULT_TOKO, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_OPEN_DEFAULT_TOKO, value).apply()
+
     var lastSyncTimestamp: Long
         get() = prefs.getLong(KEY_LAST_SYNC_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, value).apply()
@@ -53,6 +61,8 @@ class DevicePreferences(context: Context) {
         private const val KEY_ONBOARDING_COMPLETED = "key_onboarding_completed"
         private const val KEY_CREATED_TOKO_COUNT = "key_created_toko_count"
         private const val KEY_ACTIVE_TOKO_ID = "key_active_toko_id"
+        private const val KEY_DEFAULT_TOKO_ID = "key_default_toko_id"
+        private const val KEY_AUTO_OPEN_DEFAULT_TOKO = "key_auto_open_default_toko"
         private const val KEY_LAST_SYNC_TIMESTAMP = "key_last_sync_timestamp"
     }
 }

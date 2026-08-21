@@ -28,14 +28,14 @@ class TokoRepositoryImpl(
 
     override suspend fun getTokoById(id: String): Toko? {
         val entity = tokoDao.getTokoById(id) ?: return null
-        val myRoleStr = tokoMemberDao.getMyRole(id, prefs.deviceId) ?: return null
+        val myRole = getMyRole(id)
         val memberCount = tokoMemberDao.getMembersForToko(id).size
         return Toko(
             id = entity.id,
             namaToko = entity.namaToko,
             ownerDeviceId = entity.ownerDeviceId,
             ownerDeviceName = entity.ownerDeviceName,
-            myRole = MemberRole.fromString(myRoleStr),
+            myRole = myRole,
             memberCount = memberCount,
             createdAt = entity.createdAt,
             updatedAt = entity.updatedAt
@@ -114,6 +114,9 @@ class TokoRepositoryImpl(
         if (prefs.activeTokoId == tokoId) {
             prefs.activeTokoId = null
         }
+        if (prefs.defaultTokoId == tokoId) {
+            prefs.defaultTokoId = null
+        }
         return Result.success(Unit)
     }
 
@@ -126,6 +129,9 @@ class TokoRepositoryImpl(
         if (prefs.activeTokoId == tokoId) {
             prefs.activeTokoId = null
         }
+        if (prefs.defaultTokoId == tokoId) {
+            prefs.defaultTokoId = null
+        }
         return Result.success(Unit)
     }
 
@@ -136,6 +142,12 @@ class TokoRepositoryImpl(
     }
 
     override suspend fun getMyRole(tokoId: String): MemberRole {
+        // Cek apakah perangkat ini adalah owner asli di tabel tokos
+        val toko = tokoDao.getTokoById(tokoId)
+        if (toko != null && toko.ownerDeviceId == prefs.deviceId) {
+            return MemberRole.OWNER
+        }
+
         val roleStr = tokoMemberDao.getMyRole(tokoId, prefs.deviceId)
         return if (roleStr != null) MemberRole.fromString(roleStr) else MemberRole.USER
     }

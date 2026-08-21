@@ -76,6 +76,8 @@ class MainViewModel(
 
     val deviceName: String get() = prefs.deviceName
     val createdTokoCount: Int get() = prefs.createdTokoCount
+    val defaultTokoId: String? get() = prefs.defaultTokoId
+    val autoOpenDefault: Boolean get() = prefs.autoOpenDefaultToko
 
     // List of Tokos joined by this device
     val myTokos: StateFlow<List<Toko>> = getMyTokosUseCase()
@@ -145,7 +147,6 @@ class MainViewModel(
     ) { toko, itemsList, chartIds, timeframe, customRange ->
         if (toko == null || itemsList.isEmpty()) return@combine emptyList<ItemTrendData>()
 
-        // Default: jika watchlist kosong, tampilkan hingga 3 barang pertama
         val targetIds = if (chartIds.isEmpty()) itemsList.take(3).map { it.id } else chartIds
         val targetItems = itemsList.filter { it.id in targetIds }
 
@@ -210,7 +211,7 @@ class MainViewModel(
     val lastSyncResult: StateFlow<String?> = syncOrchestrator.lastSyncResult
 
     init {
-        // Sync active toko from preferences once tokos are loaded
+        // Observe and automatically resolve active toko
         viewModelScope.launch {
             myTokos.collect { tokos ->
                 if (tokos.isNotEmpty()) {
@@ -229,9 +230,17 @@ class MainViewModel(
     fun selectToko(toko: Toko) {
         _activeToko.value = toko
         prefs.activeTokoId = toko.id
-        _filter.value = ItemFilter() // reset filter on toko change
-        _chartItemIds.value = emptyList() // reset dashboard watchlist to default
+        _filter.value = ItemFilter()
+        _chartItemIds.value = emptyList()
         syncOrchestrator.triggerSync()
+    }
+
+    fun setDefaultToko(tokoId: String?) {
+        prefs.defaultTokoId = tokoId
+    }
+
+    fun setAutoOpenDefaultToko(enable: Boolean) {
+        prefs.autoOpenDefaultToko = enable
     }
 
     fun setDeviceNameAndCompleteOnboarding(name: String) {
@@ -301,7 +310,6 @@ class MainViewModel(
             _isLoading.value = true
             _errorMessage.value = null
 
-            // Fetch device info to see available tokos on this peer
             val infoResult = syncClient.fetchDeviceInfo(peer.hostAddress, peer.port)
             if (infoResult.isFailure) {
                 _isLoading.value = false
@@ -316,14 +324,12 @@ class MainViewModel(
                 return@launch
             }
 
-            // Join first served toko
             val targetToko = servedTokos.first()
             val joinResult = syncClient.requestJoinToko(targetToko.id, peer.hostAddress, peer.port)
             joinResult.fold(
                 onSuccess = { resp ->
                     _isLoading.value = false
                     if (resp.success && resp.toko != null) {
-                        // Trigger immediate sync
                         syncOrchestrator.triggerSync()
                         onSuccess()
                     } else {
