@@ -1,7 +1,6 @@
 package com.warungsync.app.presentation.screen.itemlist
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -48,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -258,10 +258,19 @@ fun ItemListScreen(
                                 pivotFractionY = if (elasticOffset >= 0f) 0f else 1f
                             )
                         },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = 14.dp,
+                        end = 16.dp,
+                        bottom = 24.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(items, key = { it.id }) { item ->
+                    items(
+                        items = items,
+                        key = { it.id },
+                        contentType = { "product" }
+                    ) { item ->
                         ItemCard(
                             item = item,
                             onItemClick = { selectedItemForDetail = item },
@@ -342,18 +351,30 @@ private fun Modifier.productScrollMotion(
         val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
         val itemCenter = visibleItem.offset + visibleItem.size / 2f
         val halfViewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / 2f
-        val centerProximity = if (halfViewport > 0f) {
-            (1f - abs(itemCenter - viewportCenter) / halfViewport).coerceIn(0f, 1f)
+        val normalizedDistance = if (halfViewport > 0f) {
+            (abs(itemCenter - viewportCenter) / halfViewport).coerceIn(0f, 1f)
         } else {
-            1f
+            0f
         }
-        val motionFraction = min(visibleFraction, 0.35f + centerProximity * 0.65f)
-        val easedFraction = FastOutSlowInEasing.transform(motionFraction)
-        alpha = 0.35f + 0.65f * easedFraction
-        val scale = 0.88f + 0.12f * easedFraction
+
+        // Keep the middle steady, then progressively accentuate both screen edges.
+        // Smoothstep prevents a visible jump when a card enters the effect zone.
+        val distanceEffect = ((normalizedDistance - 0.20f) / 0.80f).coerceIn(0f, 1f)
+        val clippedEffect = (1f - visibleFraction).coerceIn(0f, 1f)
+        val rawEffect = max(distanceEffect, clippedEffect)
+        val smoothEffect = rawEffect * rawEffect * (3f - 2f * rawEffect)
+
+        alpha = 1f - 0.82f * smoothEffect
+        val scale = 1f - 0.28f * smoothEffect
         scaleX = scale
         scaleY = scale
+        translationY = when {
+            itemCenter < viewportCenter -> -visibleItem.size * 0.05f * smoothEffect
+            itemCenter > viewportCenter -> visibleItem.size * 0.05f * smoothEffect
+            else -> 0f
+        }
         transformOrigin = TransformOrigin.Center
+        compositingStrategy = CompositingStrategy.ModulateAlpha
     }
 }
 

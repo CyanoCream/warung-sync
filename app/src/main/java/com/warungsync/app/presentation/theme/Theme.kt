@@ -35,6 +35,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = TextPrimaryDark,
     surfaceVariant = Color(0xFF334155),
     onSurfaceVariant = TextSecondaryDark,
+    outline = SlateSecondaryLight,
+    outlineVariant = CardBorderDark,
 
     error = StatusDanger,
     onError = Color.White
@@ -57,6 +59,8 @@ private val LightColorScheme = lightColorScheme(
     onSurface = TextPrimaryLight,
     surfaceVariant = Color(0xFFF1F5F9),
     onSurfaceVariant = TextSecondaryLight,
+    outline = TextMutedLight,
+    outlineVariant = CardBorderLight,
 
     error = StatusDanger,
     onError = Color.White
