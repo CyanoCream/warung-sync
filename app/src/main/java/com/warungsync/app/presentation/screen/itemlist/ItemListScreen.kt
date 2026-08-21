@@ -20,20 +20,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -44,11 +53,12 @@ import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
+import com.warungsync.app.domain.model.SyncStatus
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.presentation.components.EmptyStateView
-import com.warungsync.app.presentation.components.EnhancedFilterBar
 import com.warungsync.app.presentation.components.ItemCard
-import com.warungsync.app.presentation.components.RealtimeSearchBar
+import com.warungsync.app.presentation.components.SearchAndFilterRow
+import com.warungsync.app.presentation.screen.additem.AddEditItemSheet
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +68,7 @@ fun ItemListScreen(
     items: List<Item>,
     categories: List<Category>,
     filter: ItemFilter,
+    syncStatus: SyncStatus = SyncStatus(),
     isSyncing: Boolean,
     lastSyncMessage: String?,
     onSearchQueryChange: (String) -> Unit,
@@ -67,47 +78,38 @@ fun ItemListScreen(
     onSyncClick: () -> Unit,
     onBackToTokoList: () -> Unit,
     onManageTokoClick: () -> Unit,
+    onAddItem: ((nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit)? = null,
+    onEditItem: ((id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit)? = null,
+    onAddCategory: ((String) -> Unit)? = null,
     onItemClick: (Item) -> Unit,
-    onHistoryClick: (Item) -> Unit
+    onHistoryClick: (Item) -> Unit,
+    showHeader: Boolean = true
 ) {
-    // Animasi icon sync berputar mulus saat syncing
-    val infiniteTransition = rememberInfiniteTransition(label = "sync_rotation")
-    val angle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation_angle"
-    )
+    val canManage = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
+    var showAddItemSheet by remember { mutableStateOf(false) }
+    var itemToEdit by remember { mutableStateOf<Item?>(null) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryName by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showHeader) TopAppBar(
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = currentToko.namaToko,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.size(8.dp))
-                            RoleBadge(role = currentToko.myRole)
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Katalog Harga Barang",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                            text = currentToko.namaToko,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
                         )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        RoleBadge(role = currentToko.myRole)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackToTokoList) {
                         Icon(
                             imageVector = Icons.Default.Store,
-                            contentDescription = "Pilih Toko Lain",
+                            contentDescription = "Pilih Toko",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -115,12 +117,7 @@ fun ItemListScreen(
                 actions = {
                     // Tombol Sync: icon berputar mulus saat syncing
                     IconButton(onClick = onSyncClick) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "Sinkronisasi Data",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = if (isSyncing) Modifier.rotate(angle) else Modifier
-                        )
+                        SyncIcon(isSyncing)
                     }
 
                     if (currentToko.myRole == MemberRole.OWNER) {
@@ -147,15 +144,10 @@ fun ItemListScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search Bar Interaktif & Bersih
-            RealtimeSearchBar(
-                query = filter.searchQuery,
-                onQueryChange = onSearchQueryChange,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-
-            // Enhanced Filter & Sort Bar
-            EnhancedFilterBar(
+            // Search Bar sejajar dengan Filter Popup Modal
+            SearchAndFilterRow(
+                searchQuery = filter.searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
                 categories = categories,
                 selectedCategoryId = filter.categoryId,
                 onCategorySelected = onCategorySelected,
@@ -166,22 +158,6 @@ fun ItemListScreen(
                 onSortChanged = onSortChanged
             )
 
-            // Total barang info
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Menampilkan ${items.size} barang",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
             // List Items
             if (items.isEmpty()) {
                 val hasActiveFilter = filter.searchQuery.isNotBlank() ||
@@ -189,32 +165,35 @@ fun ItemListScreen(
                         filter.minHarga != null ||
                         filter.maxHarga != null
 
-                EmptyStateView(
-                    title = if (hasActiveFilter) "Barang Tidak Ditemukan" else "Belum Ada Data Barang",
-                    message = if (hasActiveFilter) {
-                        "Coba ubah kata kunci pencarian, rentang harga, atau filter kategori."
-                    } else {
-                        "Data barang di toko ini masih kosong."
-                    },
-                    actionLabel = if (hasActiveFilter) "Reset Filter" else null,
-                    onActionClick = if (hasActiveFilter) {
-                        {
+                if (hasActiveFilter) {
+                    EmptyStateView(
+                        actionLabel = "Reset Filter",
+                        onActionClick = {
                             onSearchQueryChange("")
                             onCategorySelected(null)
                             onPriceRangeChanged(null, null)
                         }
-                    } else null
-                )
+                    )
+                } else {
+                    EmptyStateView()
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(items, key = { it.id }) { item ->
                         ItemCard(
                             item = item,
-                            onItemClick = { onItemClick(item) },
+                            onItemClick = {
+                                if (canManage && onEditItem != null) {
+                                    itemToEdit = item
+                                } else {
+                                    onItemClick(item)
+                                }
+                            },
+                            onEditClick = if (canManage && onEditItem != null) { { itemToEdit = item } } else null,
                             onHistoryClick = { onHistoryClick(item) }
                         )
                     }
@@ -222,4 +201,107 @@ fun ItemListScreen(
             }
         }
     }
+
+    // Modal Sheet Tambah / Edit Barang Langsung dari Halaman Katalog
+    if (showAddItemSheet || itemToEdit != null) {
+        AddEditItemSheet(
+            categories = categories,
+            editingItem = itemToEdit,
+            onDismiss = {
+                showAddItemSheet = false
+                itemToEdit = null
+            },
+            onSave = { nama, deskripsi, harga, satuan, catId ->
+                if (itemToEdit != null) {
+                    onEditItem?.invoke(itemToEdit!!.id, nama, deskripsi, harga, satuan, catId)
+                } else {
+                    onAddItem?.invoke(nama, deskripsi, harga, satuan, catId)
+                }
+                showAddItemSheet = false
+                itemToEdit = null
+            }
+        )
+    }
+
+    // Dialog Buat Kategori Pertama jika belum ada kategori
+    if (showAddCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddCategoryDialog = false
+                newCategoryName = ""
+            },
+            title = { Text("Buat Kategori Pertama") },
+            text = {
+                Column {
+                    Text(
+                        text = "Barang membutuhkan minimal 1 kategori (misal: Sembako, Minuman, Makanan Ringan).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newCategoryName,
+                        onValueChange = { newCategoryName = it },
+                        label = { Text("Nama Kategori") },
+                        placeholder = { Text("Contoh: Sembako") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newCategoryName.isNotBlank()) {
+                            onAddCategory?.invoke(newCategoryName.trim())
+                            showAddCategoryDialog = false
+                            newCategoryName = ""
+                            showAddItemSheet = true
+                        }
+                    },
+                    enabled = newCategoryName.isNotBlank()
+                ) {
+                    Text("Simpan & Lanjut Tambah Barang")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAddCategoryDialog = false
+                    newCategoryName = ""
+                }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun SyncIcon(isSyncing: Boolean) {
+    // Do not keep an infinite animation clock alive while the app is idle.
+    if (!isSyncing) {
+        Icon(
+            imageVector = Icons.Default.Sync,
+            contentDescription = "Sync",
+            tint = MaterialTheme.colorScheme.onPrimary
+        )
+        return
+    }
+
+    val transition = rememberInfiniteTransition(label = "sync_rotation")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation_angle"
+    )
+    Icon(
+        imageVector = Icons.Default.Sync,
+        contentDescription = "Sedang sinkronisasi",
+        tint = MaterialTheme.colorScheme.onPrimary,
+        modifier = Modifier.rotate(angle)
+    )
 }

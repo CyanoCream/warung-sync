@@ -104,6 +104,7 @@ class GetItemPriceTrendUseCase(private val itemRepository: ItemRepository) {
             currentPrice
         }
 
+        var historyIndex = 0
         while (cal.timeInMillis <= endTime) {
             // Dapatkan akhir bulan
             val monthLabel = format.format(cal.time)
@@ -112,10 +113,14 @@ class GetItemPriceTrendUseCase(private val itemRepository: ItemRepository) {
             cal.set(Calendar.MINUTE, 59)
             val monthEndTimestamp = cal.timeInMillis.coerceAtMost(endTime)
 
-            // Cari harga terakhir di bulan ini
-            val changesInMonth = historyList.filter { it.changedAt <= monthEndTimestamp }
-            if (changesInMonth.isNotEmpty()) {
-                runningPrice = changesInMonth.last().hargaBaru
+            // Consume each history row once. The old implementation filtered the
+            // entire list for every month (O(months * history)).
+            while (
+                historyIndex < historyList.size &&
+                historyList[historyIndex].changedAt <= monthEndTimestamp
+            ) {
+                runningPrice = historyList[historyIndex].hargaBaru
+                historyIndex++
             }
 
             points.add(

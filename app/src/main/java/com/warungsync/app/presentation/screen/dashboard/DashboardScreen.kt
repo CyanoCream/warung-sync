@@ -68,7 +68,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DashboardScreen(
     currentToko: Toko,
@@ -81,11 +85,16 @@ fun DashboardScreen(
     onCustomRangeSelected: (Long, Long) -> Unit,
     onAddChartItem: (Item) -> Unit,
     onRemoveChartItem: (String) -> Unit,
-    onBackToTokoList: () -> Unit
+    onBackToTokoList: () -> Unit,
+    showHeader: Boolean = true
 ) {
     var selectedCategoryForCount by remember { mutableStateOf<String?>(null) }
     var showAddItemDialog by remember { mutableStateOf(false) }
     var showDateRangePicker by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val hasActiveFilter = selectedCategoryForCount != null || currentTimeframe != TrendTimeframe.THIS_MONTH
 
     val filteredItemsCount = if (selectedCategoryForCount == null) {
         allItems.size
@@ -97,23 +106,16 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showHeader) TopAppBar(
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Dashboard ${currentToko.namaToko}",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            RoleBadge(role = currentToko.myRole)
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Ringkasan Inventaris & Tren Harga",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                            text = "Dashboard",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        RoleBadge(role = currentToko.myRole)
                     }
                 },
                 navigationIcon = {
@@ -125,9 +127,19 @@ fun DashboardScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = { showFilterSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Filter Dashboard",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                     navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
@@ -141,14 +153,6 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section 1: Ringkasan Metrik Produk & Kategori
-            item {
-                Text(
-                    text = "Ringkasan Produk",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -203,7 +207,7 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Text(
-                                text = "Kategori Aktif",
+                                text = "Kategori",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                             )
@@ -212,77 +216,120 @@ fun DashboardScreen(
                 }
             }
 
-            // Filter Hitung Produk per Kategori
+            // Section 2: Tren Harga
             item {
-                Text(
-                    text = "Filter Hitung Produk Berdasarkan Kategori:",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    item {
-                        FilterChip(
-                            selected = selectedCategoryForCount == null,
-                            onClick = { selectedCategoryForCount = null },
-                            label = { Text("Semua (${allItems.size})") }
-                        )
-                    }
-                    items(categories, key = { it.id }) { cat ->
-                        val count = allItems.count { it.categoryId == cat.id }
-                        FilterChip(
-                            selected = selectedCategoryForCount == cat.id,
-                            onClick = {
-                                selectedCategoryForCount = if (selectedCategoryForCount == cat.id) null else cat.id
-                            },
-                            label = { Text("${cat.namaKategori} ($count)") }
-                        )
-                    }
-                }
-            }
-
-            // Section 2: Tren Harga & Watchlist Multi-Chart
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Grafik Tren Naik-Turun Harga",
+                            text = "Tren Harga",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = "Pantau pergerakan harga komoditas",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { showFilterSheet = true }
+                        ) {
+                            Text(
+                                text = if (currentTimeframe == TrendTimeframe.CUSTOM && customRange != null) {
+                                    "${dateFormatter.format(Date(customRange.startTimestamp))} - ${dateFormatter.format(Date(customRange.endTimestamp))}"
+                                } else {
+                                    currentTimeframe.label
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
-                    Button(
-                        onClick = { showAddItemDialog = true },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Tambah Grafik", style = MaterialTheme.typography.labelMedium)
+                    Row {
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "Filter",
+                                tint = if (hasActiveFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { showAddItemDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Tambah Grafik",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
 
-            // Timeframe Selector Chips (Bulan Ini, 3 Bulan, 6 Bulan, 1 Tahun, Custom)
-            item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // List Chart Cards
+            if (trendCharts.isEmpty()) {
+                item {
+                    EmptyStateView()
+                }
+            } else {
+                items(trendCharts, key = { it.item.id }) { trendData ->
+                    PriceTrendCard(
+                        trendData = trendData,
+                        onRemoveChart = { onRemoveChartItem(trendData.item.id) }
+                    )
+                }
+            }
+        }
+    }
+
+    // Modal Popup Filter Dashboard
+    if (showFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(TrendTimeframe.entries.toTypedArray()) { timeframe ->
+                    Text(
+                        text = "Filter Dashboard",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (selectedCategoryForCount != null || currentTimeframe != TrendTimeframe.THIS_MONTH) {
+                        TextButton(
+                            onClick = {
+                                selectedCategoryForCount = null
+                                onTimeframeSelected(TrendTimeframe.THIS_MONTH)
+                            }
+                        ) {
+                            Text("Reset", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Periode Grafik (Timeframe)
+                Text(
+                    text = "Periode Grafik",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TrendTimeframe.entries.forEach { timeframe ->
                         val isSelected = currentTimeframe == timeframe
                         FilterChip(
                             selected = isSelected,
@@ -304,31 +351,66 @@ fun DashboardScreen(
                                 }
                             },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                             )
                         )
                     }
                 }
-            }
 
-            // List Chart Cards
-            if (trendCharts.isEmpty()) {
-                item {
-                    EmptyStateView(
-                        title = "Belum Ada Grafik Barang",
-                        message = "Klik tombol '+ Tambah Grafik' di atas untuk memantau tren pergerakan harga barang tertentu (misal: Telur, Beras, Minyak).",
-                        actionLabel = "+ Tambah Grafik Barang",
-                        onActionClick = { showAddItemDialog = true }
+                if (categories.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Hitung Produk per Kategori
+                    Text(
+                        text = "Kategori Produk",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedCategoryForCount == null,
+                            onClick = { selectedCategoryForCount = null },
+                            label = { Text("Semua (${allItems.size})") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                        categories.forEach { cat ->
+                            val count = allItems.count { it.categoryId == cat.id }
+                            FilterChip(
+                                selected = selectedCategoryForCount == cat.id,
+                                onClick = {
+                                    selectedCategoryForCount = if (selectedCategoryForCount == cat.id) null else cat.id
+                                },
+                                label = { Text("${cat.namaKategori} ($count)") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                        }
+                    }
                 }
-            } else {
-                items(trendCharts, key = { it.item.id }) { trendData ->
-                    PriceTrendCard(
-                        trendData = trendData,
-                        onRemoveChart = { onRemoveChartItem(trendData.item.id) }
-                    )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { showFilterSheet = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text("Tutup", fontWeight = FontWeight.Bold)
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -380,3 +462,84 @@ fun DashboardScreen(
         )
     }
 }
+
+@Composable
+fun AddChartItemDialog(
+    items: List<Item>,
+    existingItemIds: Set<String>,
+    onDismiss: () -> Unit,
+    onItemSelected: (Item) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val availableItems = remember(items, existingItemIds, searchQuery) {
+        items.filter { it.id !in existingItemIds && it.namaBarang.contains(searchQuery, ignoreCase = true) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pilih Barang untuk Grafik") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Cari barang...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (availableItems.isEmpty()) {
+                    Text(
+                        text = if (items.isEmpty()) "Belum ada data barang." else "Semua barang sudah ada di grafik / tidak ditemukan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.height(260.dp)) {
+                        items(availableItems, key = { it.id }) { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onItemSelected(item) }
+                                    .padding(vertical = 4.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = item.namaBarang, fontWeight = FontWeight.Bold)
+                                        item.categoryName?.let {
+                                            Text(
+                                                text = it,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Rp %,d".format(item.harga.toLong()),
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal")
+            }
+        }
+    )
+}
+

@@ -37,18 +37,21 @@ import com.warungsync.app.network.discovery.NsdDiscoveryManager
 import com.warungsync.app.network.sync.SyncClient
 import com.warungsync.app.network.sync.SyncOrchestrator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class MainViewModel(
     private val getMyTokosUseCase: GetMyTokosUseCase,
     private val createTokoUseCase: CreateTokoUseCase,
@@ -91,8 +94,14 @@ class MainViewModel(
     private val _filter = MutableStateFlow(ItemFilter())
     val filter: StateFlow<ItemFilter> = _filter.asStateFlow()
 
+    // Keep text input immediate, but avoid rebuilding a Room query for every
+    // keystroke. Non-search filters still apply immediately.
+    private val effectiveFilter = _filter
+        .debounce { state -> if (state.searchQuery.isEmpty()) 0L else 250L }
+        .distinctUntilChanged()
+
     // Items for active toko with filter
-    val items: StateFlow<List<Item>> = combine(_activeToko, _filter) { toko, filterState ->
+    val items: StateFlow<List<Item>> = combine(_activeToko, effectiveFilter) { toko, filterState ->
         Pair(toko, filterState)
     }.flatMapLatest { (toko, filterState) ->
         if (toko == null) flowOf(emptyList())
@@ -232,7 +241,6 @@ class MainViewModel(
         prefs.activeTokoId = toko.id
         _filter.value = ItemFilter()
         _chartItemIds.value = emptyList()
-        syncOrchestrator.triggerSync()
     }
 
     fun setDefaultToko(tokoId: String?) {
@@ -413,8 +421,9 @@ class MainViewModel(
     }
 
     fun deleteItem(id: String) {
+        val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            deleteItemUseCase(id).onFailure {
+            deleteItemUseCase(tokoId, id).onFailure {
                 _errorMessage.value = it.message
             }
         }

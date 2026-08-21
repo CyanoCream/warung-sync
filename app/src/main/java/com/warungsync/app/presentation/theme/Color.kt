@@ -33,3 +33,13 @@ val StatusSuccess = Color(0xFF10B981)
 val StatusWarning = Color(0xFFF59E0B)
 val StatusDanger = Color(0xFFEF4444)
 val StatusInfo = Color(0xFF3B82F6)
+
+// Compatibility Aliases for screens
+val Emerald40 = IndigoPrimary
+val EmeraldBgLight = IndigoBgSubtle
+val PriceGreen = StatusSuccess
+val PriceRed = StatusDanger
+val StatusConnected = StatusSuccess
+val StatusOffline = StatusDanger
+val StatusSyncing = StatusInfo
+

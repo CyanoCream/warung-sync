@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
@@ -63,12 +64,13 @@ import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.presentation.components.EmptyStateView
-import com.warungsync.app.presentation.components.EnhancedFilterBar
 import com.warungsync.app.presentation.components.ItemCard
-import com.warungsync.app.presentation.components.RealtimeSearchBar
+import com.warungsync.app.presentation.components.SearchAndFilterRow
 import com.warungsync.app.presentation.screen.additem.AddEditItemSheet
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
 import kotlinx.coroutines.launch
+
+enum class MasterDataSection { BOTH, ITEMS, CATEGORIES }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -88,7 +90,9 @@ fun MasterDataScreen(
     onUpdateCategory: (id: String, String) -> Unit,
     onDeleteCategory: (id: String) -> Unit,
     onHistoryClick: (Item) -> Unit,
-    onBackToTokoList: () -> Unit
+    onBackToTokoList: () -> Unit,
+    section: MasterDataSection = MasterDataSection.BOTH,
+    showHeader: Boolean = true
 ) {
     val canEdit = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
 
@@ -96,7 +100,7 @@ fun MasterDataScreen(
     if (!canEdit) {
         Scaffold(
             topBar = {
-                TopAppBar(
+                if (showHeader) TopAppBar(
                     title = { Text("Master Data") },
                     navigationIcon = {
                         IconButton(onClick = onBackToTokoList) {
@@ -156,6 +160,8 @@ fun MasterDataScreen(
 
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
+    val showingItems = section == MasterDataSection.ITEMS ||
+        (section == MasterDataSection.BOTH && pagerState.currentPage == 0)
 
     var showAddItemSheet by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<Item?>(null) }
@@ -167,23 +173,16 @@ fun MasterDataScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (showHeader) TopAppBar(
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Kelola Data: ${currentToko.namaToko}",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            RoleBadge(role = currentToko.myRole)
-                        }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Tambah, edit, dan hapus master data",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                            text = "Kelola Data",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        RoleBadge(role = currentToko.myRole)
                     }
                 },
                 navigationIcon = {
@@ -195,30 +194,52 @@ fun MasterDataScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            if (showingItems) {
+                                if (categories.isEmpty()) {
+                                    showAddCategoryDialog = true
+                                } else {
+                                    showAddItemSheet = true
+                                }
+                            } else {
+                                showAddCategoryDialog = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Tambah Data",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
                     navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         },
         floatingActionButton = {
-            if (pagerState.currentPage == 0) {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddItemSheet = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("Tambah Barang") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            } else {
-                ExtendedFloatingActionButton(
-                    onClick = { showAddCategoryDialog = true },
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text("Tambah Kategori") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+            FloatingActionButton(
+                onClick = {
+                    if (showingItems) {
+                        if (categories.isEmpty()) {
+                            showAddCategoryDialog = true
+                        } else {
+                            showAddItemSheet = true
+                        }
+                    } else {
+                        showAddCategoryDialog = true
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Tambah")
             }
         }
     ) { paddingValues ->
@@ -227,27 +248,44 @@ fun MasterDataScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            TabRow(selectedTabIndex = pagerState.currentPage) {
-                Tab(
-                    selected = pagerState.currentPage == 0,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text("Master Barang (${items.size})") },
-                    icon = { Icon(Icons.Default.Inventory2, contentDescription = null) }
+            when (section) {
+                MasterDataSection.ITEMS -> MasterItemsTab(
+                    items = items,
+                    categories = categories,
+                    filter = filter,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onCategorySelected = onCategorySelected,
+                    onPriceRangeChanged = onPriceRangeChanged,
+                    onSortChanged = onSortChanged,
+                    onEditItem = { itemToEdit = it },
+                    onDeleteItem = { itemToDelete = it },
+                    onHistoryClick = onHistoryClick
                 )
-                Tab(
-                    selected = pagerState.currentPage == 1,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                    text = { Text("Master Kategori (${categories.size})") },
-                    icon = { Icon(Icons.Default.Category, contentDescription = null) }
+                MasterDataSection.CATEGORIES -> MasterCategoriesTab(
+                    categories = categories,
+                    onEditCategory = { categoryToEdit = it },
+                    onDeleteCategory = { categoryToDelete = it }
                 )
-            }
+                MasterDataSection.BOTH -> {
+                    TabRow(selectedTabIndex = pagerState.currentPage) {
+                        Tab(
+                            selected = pagerState.currentPage == 0,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            text = { Text("Barang (${items.size})") }
+                        )
+                        Tab(
+                            selected = pagerState.currentPage == 1,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            text = { Text("Kategori (${categories.size})") }
+                        )
+                    }
 
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                when (page) {
-                    0 -> MasterItemsTab(
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        when (page) {
+                            0 -> MasterItemsTab(
                         items = items,
                         categories = categories,
                         filter = filter,
@@ -259,11 +297,13 @@ fun MasterDataScreen(
                         onDeleteItem = { itemToDelete = it },
                         onHistoryClick = onHistoryClick
                     )
-                    1 -> MasterCategoriesTab(
-                        categories = categories,
-                        onEditCategory = { categoryToEdit = it },
-                        onDeleteCategory = { categoryToDelete = it }
-                    )
+                            1 -> MasterCategoriesTab(
+                                categories = categories,
+                                onEditCategory = { categoryToEdit = it },
+                                onDeleteCategory = { categoryToDelete = it }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -417,14 +457,10 @@ fun MasterItemsTab(
     onHistoryClick: (Item) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // Search & Filter
-        RealtimeSearchBar(
-            query = filter.searchQuery,
-            onQueryChange = onSearchQueryChange,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-
-        EnhancedFilterBar(
+        // Search & Filter sejajar dengan modal popup
+        SearchAndFilterRow(
+            searchQuery = filter.searchQuery,
+            onSearchQueryChange = onSearchQueryChange,
             categories = categories,
             selectedCategoryId = filter.categoryId,
             onCategorySelected = onCategorySelected,
@@ -436,24 +472,70 @@ fun MasterItemsTab(
         )
 
         if (items.isEmpty()) {
-            EmptyStateView(
-                title = "Tidak Ada Barang",
-                message = "Klik tombol 'Tambah Barang' di bawah untuk menambahkan barang baru."
-            )
+            EmptyStateView()
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(items, key = { it.id }) { item ->
-                    ItemCard(
-                        item = item,
-                        onItemClick = { onEditItem(item) },
-                        onEditClick = { onEditItem(item) },
-                        onDeleteClick = { onDeleteItem(item) },
-                        onHistoryClick = { onHistoryClick(item) }
-                    )
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.namaBarang,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                item.categoryName?.let { cat ->
+                                    Text(
+                                        text = cat,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "Rp %,d per %s".format(item.harga.toLong(), item.satuan),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { onEditItem(item) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Edit",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                IconButton(onClick = { onDeleteItem(item) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Hapus",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -467,10 +549,7 @@ fun MasterCategoriesTab(
     onDeleteCategory: (Category) -> Unit
 ) {
     if (categories.isEmpty()) {
-        EmptyStateView(
-            title = "Belum Ada Kategori",
-            message = "Tambahkan kategori terlebih dahulu sebelum menambah barang."
-        )
+        EmptyStateView()
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

@@ -1,8 +1,8 @@
 package com.warungsync.app.presentation.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -10,20 +10,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,12 +45,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.SortBy
+import com.warungsync.app.presentation.util.formatThousandsInput
+import com.warungsync.app.presentation.util.parseThousandsInput
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * Search Bar sejajar dengan Tombol Filter Modal Popup.
+ * Tidak memakan banyak ruang, rapi, dan modern.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun EnhancedFilterBar(
+fun SearchAndFilterRow(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     categories: List<Category>,
     selectedCategoryId: String?,
     onCategorySelected: (String?) -> Unit,
@@ -59,174 +71,214 @@ fun EnhancedFilterBar(
     onSortChanged: (SortBy) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showAdvancedFilters by remember { mutableStateOf(false) }
-    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    val hasActiveFilter = selectedCategoryId != null || minPrice != null || maxPrice != null || currentSort != SortBy.DATE_DESC
 
-    var minInput by remember(minPrice) { mutableStateOf(minPrice?.toInt()?.toString() ?: "") }
-    var maxInput by remember(maxPrice) { mutableStateOf(maxPrice?.toInt()?.toString() ?: "") }
-
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Baris 1: Kategori horizontal scroll + Tombol Filter & Sort
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        // Search field di sebelah kiri
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            placeholder = "Cari...",
+            modifier = Modifier.weight(1f)
+        )
+
+        // Tombol Filter di sebelah kanan search
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = if (hasActiveFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp,
+            modifier = Modifier
+                .size(48.dp)
+                .clickable { showFilterSheet = true }
         ) {
-            LazyRow(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                item {
-                    FilterChip(
-                        selected = selectedCategoryId == null,
-                        onClick = { onCategorySelected(null) },
-                        label = { Text("Semua") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-                }
-
-                items(categories, key = { it.id }) { category ->
-                    FilterChip(
-                        selected = selectedCategoryId == category.id,
-                        onClick = {
-                            if (selectedCategoryId == category.id) {
-                                onCategorySelected(null)
-                            } else {
-                                onCategorySelected(category.id)
-                            }
-                        },
-                        label = { Text(category.namaKategori) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Sort Dropdown button
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable { sortMenuExpanded = true }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sort,
-                        contentDescription = "Sort",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = currentSort.label,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = { sortMenuExpanded = false }
-                ) {
-                    SortBy.entries.forEach { sortBy ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = sortBy.label,
-                                    fontWeight = if (sortBy == currentSort) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            onClick = {
-                                onSortChanged(sortBy)
-                                sortMenuExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            IconButton(onClick = { showAdvancedFilters = !showAdvancedFilters }) {
                 Icon(
-                    imageVector = if (showAdvancedFilters) Icons.Default.ArrowDropUp else Icons.Default.FilterList,
-                    contentDescription = "Toggle Price Filter",
-                    tint = if (minPrice != null || maxPrice != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Filter",
+                    tint = if (hasActiveFilter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+    }
 
-        // Baris 2: Advanced Price Range Filter (Collapsible)
-        AnimatedVisibility(visible = showAdvancedFilters) {
+    // A plain dialog opens much more cheaply than a full-screen animated sheet.
+    if (showFilterSheet) {
+        var tempMinInput by remember(minPrice) { mutableStateOf(minPrice?.toLong()?.toString()?.let(::formatThousandsInput) ?: "") }
+        var tempMaxInput by remember(maxPrice) { mutableStateOf(maxPrice?.toLong()?.toString()?.let(::formatThousandsInput) ?: "") }
+        var tempCatId by remember(selectedCategoryId) { mutableStateOf(selectedCategoryId) }
+        var tempSort by remember(currentSort) { mutableStateOf(currentSort) }
+
+        Dialog(onDismissRequest = { showFilterSheet = false }) {
             Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.widthIn(max = 360.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .heightIn(max = 480.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = "Rentang Harga (Rp)",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = "Filter & Urutkan",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = minInput,
-                            onValueChange = {
-                                minInput = it.filter { char -> char.isDigit() }
-                                onPriceRangeChanged(minInput.toDoubleOrNull(), maxInput.toDoubleOrNull())
-                            },
-                            label = { Text("Min") },
-                            placeholder = { Text("0") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-
-                        Text("—", style = MaterialTheme.typography.titleMedium)
-
-                        OutlinedTextField(
-                            value = maxInput,
-                            onValueChange = {
-                                maxInput = it.filter { char -> char.isDigit() }
-                                onPriceRangeChanged(minInput.toDoubleOrNull(), maxInput.toDoubleOrNull())
-                            },
-                            label = { Text("Max") },
-                            placeholder = { Text("Tak terhingga") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
-                        )
-
-                        if (minInput.isNotBlank() || maxInput.isNotBlank()) {
-                            IconButton(onClick = {
-                                minInput = ""
-                                maxInput = ""
-                                onPriceRangeChanged(null, null)
-                            }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear price filter")
+                    if (tempCatId != null || tempMinInput.isNotBlank() || tempMaxInput.isNotBlank() || tempSort != SortBy.DATE_DESC) {
+                        TextButton(
+                            onClick = {
+                                tempCatId = null
+                                tempMinInput = ""
+                                tempMaxInput = ""
+                                tempSort = SortBy.DATE_DESC
                             }
+                        ) {
+                            Text("Reset", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Urutkan (Sort)
+                Text(
+                    text = "Urutkan",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    SortBy.entries.forEach { sortBy ->
+                        FilterChip(
+                            selected = tempSort == sortBy,
+                            onClick = { tempSort = sortBy },
+                            label = { Text(sortBy.label, style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.height(32.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Kategori
+                if (categories.isNotEmpty()) {
+                    Text(
+                        text = "Kategori",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        FilterChip(
+                            selected = tempCatId == null,
+                            onClick = { tempCatId = null },
+                            label = { Text("Semua", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.height(32.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                        categories.forEach { cat ->
+                            FilterChip(
+                                selected = tempCatId == cat.id,
+                                onClick = { tempCatId = if (tempCatId == cat.id) null else cat.id },
+                                label = { Text(cat.namaKategori, style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.height(32.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Rentang Harga
+                Text(
+                    text = "Rentang Harga (Rp)",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = tempMinInput,
+                        onValueChange = { tempMinInput = formatThousandsInput(it) },
+                        label = { Text("Min") },
+                        placeholder = { Text("0") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    Text("—")
+                    OutlinedTextField(
+                        value = tempMaxInput,
+                        onValueChange = { tempMaxInput = formatThousandsInput(it) },
+                        label = { Text("Max") },
+                        placeholder = { Text("Tak terhingga") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Tombol Terapkan
+                Button(
+                    onClick = {
+                        onCategorySelected(tempCatId)
+                        onSortChanged(tempSort)
+                        onPriceRangeChanged(parseThousandsInput(tempMinInput), parseThousandsInput(tempMaxInput))
+                        showFilterSheet = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Terapkan Filter", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             }
         }
     }
 }
+

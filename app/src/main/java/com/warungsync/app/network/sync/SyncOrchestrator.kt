@@ -1,10 +1,5 @@
 package com.warungsync.app.network.sync
 
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.util.Log
 import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.network.discovery.NsdDiscoveryManager
@@ -15,11 +10,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class SyncOrchestrator(
-    private val context: Context,
     private val nsdManager: NsdDiscoveryManager,
     private val syncServer: SyncServer,
     private val syncClient: SyncClient,
@@ -27,6 +22,7 @@ class SyncOrchestrator(
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var periodicSyncJob: Job? = null
+    private var launchSyncJob: Job? = null
     private var isRunning = false
 
     private val _isSyncing = MutableStateFlow(false)
@@ -34,20 +30,6 @@ class SyncOrchestrator(
 
     private val _lastSyncResult = MutableStateFlow<String?>(null)
     val lastSyncResult: StateFlow<String?> = _lastSyncResult.asStateFlow()
-
-    private val connectivityManager =
-        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) {
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-            if (isWifi) {
-                Log.i(TAG, "WiFi connected! Triggering instant sync...")
-                triggerSync()
-            }
-        }
-    }
 
     fun start() {
         if (isRunning) return
@@ -61,30 +43,15 @@ class SyncOrchestrator(
         nsdManager.registerService(serviceName, PORT)
         nsdManager.startDiscovery()
 
-        // Register WiFi connection callback for instant sync
-        registerNetworkCallback()
-
         // Schedule periodic sync every 5 hours (5 * 60 * 60 * 1000 ms)
         startPeriodicSync()
 
-        // Observe discovered peers to auto-sync active toko
-        scope.launch {
-            nsdManager.discoveredPeers.collect { peers ->
-                if (peers.isNotEmpty()) {
-                    triggerSync()
-                }
-            }
-        }
-    }
-
-    private fun registerNetworkCallback() {
-        try {
-            val request = NetworkRequest.Builder()
-                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                .build()
-            connectivityManager.registerNetworkCallback(request, networkCallback)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error registering network callback", e)
+        // Exactly one automatic sync per app launch, as soon as the first peer
+        // is discoverable. Further peer-list churn must not start more work.
+        launchSyncJob?.cancel()
+        launchSyncJob = scope.launch {
+            nsdManager.discoveredPeers.first { it.isNotEmpty() }
+            if (isRunning) triggerSync()
         }
     }
 
@@ -160,11 +127,7 @@ class SyncOrchestrator(
         isRunning = false
 
         periodicSyncJob?.cancel()
-        try {
-            connectivityManager.unregisterNetworkCallback(networkCallback)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering network callback", e)
-        }
+        launchSyncJob?.cancel()
 
         nsdManager.stopDiscovery()
         nsdManager.unregisterService()

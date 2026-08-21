@@ -91,7 +91,7 @@ fun CreateTokoScreen(
             )
 
             Text(
-                text = if (isFirstToko) "Mulai Warung Digital Anda" else "Aktivasi Toko Tambahan",
+                text = if (isFirstToko) "Buat Toko Baru" else "Tambah Toko Baru",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
@@ -99,9 +99,9 @@ fun CreateTokoScreen(
 
             Text(
                 text = if (isFirstToko) {
-                    "Sebagai pemilik toko (OWNER), Anda dapat mengelola kategori, barang, harga, dan menambahkan admin atau kasir untuk sinkronisasi lokal."
+                    "Masukkan nama toko atau warung Anda untuk mulai mencatat harga barang."
                 } else {
-                    "Perangkat ini sudah pernah membuat toko. Untuk membuat toko tambahan (#${createdTokoCount + 1}), masukkan kode OTP lisensi 6-digit dari pemilik aplikasi."
+                    "Masukkan nama toko dan kode lisensi untuk menambah toko baru."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

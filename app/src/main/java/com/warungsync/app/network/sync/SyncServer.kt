@@ -31,13 +31,15 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
+import io.ktor.server.engine.EmbeddedServer
+
 class SyncServer(
     private val syncRepository: SyncRepository,
     private val tokoDao: TokoDao,
     private val tokoMemberDao: TokoMemberDao,
     private val prefs: DevicePreferences
 ) {
-    private var engine: ApplicationEngine? = null
+    private var engine: EmbeddedServer<*, *>? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
     fun start(port: Int = 8080) {

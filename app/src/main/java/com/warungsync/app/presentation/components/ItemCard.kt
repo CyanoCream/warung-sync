@@ -113,52 +113,14 @@ fun ItemCard(
 
             // Tampilkan deskripsi jika ada
             if (!item.deskripsi.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = item.deskripsi,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            // Action Buttons
-            if (onEditClick != null || onDeleteClick != null || onHistoryClick != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (onHistoryClick != null) {
-                        IconButton(onClick = onHistoryClick) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = "Riwayat Harga",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    if (onEditClick != null) {
-                        IconButton(onClick = onEditClick) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Barang",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    if (onDeleteClick != null) {
-                        IconButton(onClick = onDeleteClick) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Hapus Barang",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
             }
         }
     }

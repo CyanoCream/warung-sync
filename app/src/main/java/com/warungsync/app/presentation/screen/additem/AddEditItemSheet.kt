@@ -36,6 +36,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.Item
+import com.warungsync.app.presentation.util.formatThousandsInput
+import com.warungsync.app.presentation.util.parseThousandsInput
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,7 +51,9 @@ fun AddEditItemSheet(
 
     var namaBarang by remember { mutableStateOf(editingItem?.namaBarang ?: "") }
     var deskripsi by remember { mutableStateOf(editingItem?.deskripsi ?: "") }
-    var hargaText by remember { mutableStateOf(editingItem?.harga?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "") }
+    var hargaText by remember {
+        mutableStateOf(editingItem?.harga?.toLong()?.toString()?.let(::formatThousandsInput) ?: "")
+    }
     var satuan by remember { mutableStateOf(editingItem?.satuan ?: "pcs") }
     var selectedCategoryId by remember {
         mutableStateOf(editingItem?.categoryId ?: categories.firstOrNull()?.id ?: "")
@@ -143,11 +147,11 @@ fun AddEditItemSheet(
                 OutlinedTextField(
                     value = hargaText,
                     onValueChange = {
-                        hargaText = it.filter { char -> char.isDigit() || char == '.' }
+                        hargaText = formatThousandsInput(it)
                         errorMessage = null
                     },
                     label = { Text("Harga (Rp) *") },
-                    placeholder = { Text("15000") },
+                    placeholder = { Text("15.000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1.2f),
                     singleLine = true
@@ -208,7 +212,7 @@ fun AddEditItemSheet(
                 Spacer(modifier = Modifier.width(12.dp))
                 Button(
                     onClick = {
-                        val harga = hargaText.toDoubleOrNull()
+                        val harga = parseThousandsInput(hargaText)
                         when {
                             namaBarang.isBlank() -> errorMessage = "Nama barang tidak boleh kosong"
                             selectedCategoryId.isBlank() -> errorMessage = "Pilih kategori terlebih dahulu"

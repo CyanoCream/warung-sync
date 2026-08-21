@@ -132,7 +132,7 @@ fun PriceHistoryScreen(
             if (histories.isEmpty()) {
                 EmptyStateView(
                     title = "Belum ada riwayat",
-                    subtitle = "Riwayat akan tercatat otomatis setiap ada perubahan harga atau satuan.",
+                    message = "Riwayat akan tercatat otomatis setiap ada perubahan harga atau satuan.",
                     modifier = Modifier.weight(1f)
                 )
             } else {
@@ -241,28 +241,18 @@ fun PriceHistoryScreen(
                                     Spacer(modifier = Modifier.height(4.dp))
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.PhoneAndroid,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(11.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = history.changedByDevice,
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                        )
-                                        Text(
-                                            text = " • ",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                        )
                                         Text(
                                             text = dateFormatter.format(Date(history.changedAt)),
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         )
+                                        if (history.changedByDevice.isNotBlank() && !history.changedByDevice.contains("-") && history.changedByDevice.length <= 20) {
+                                            Text(
+                                                text = " • ${history.changedByDevice}",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        }
                                     }
                                 }
                             }

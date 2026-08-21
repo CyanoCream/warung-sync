@@ -2,7 +2,9 @@ package com.warungsync.app.presentation.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -25,15 +27,15 @@ import androidx.compose.ui.unit.sp
 fun SearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    placeholder: String = "Cari nama barang...",
+    placeholder: String = "Cari...",
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
         value = query,
-        onValueChange = onQueryChange, // Langsung mengupdate query secara interaktif real-time saat tombol keyboard ditekan/dilepas (on-key-change)
+        onValueChange = onQueryChange,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .height(48.dp),
         placeholder = {
             Text(
                 text = placeholder,
@@ -45,7 +47,8 @@ fun SearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
             )
         },
         trailingIcon = {

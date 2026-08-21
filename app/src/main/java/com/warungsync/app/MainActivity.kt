@@ -2,30 +2,48 @@ package com.warungsync.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.network.sync.SyncOrchestrator
@@ -35,6 +53,7 @@ import com.warungsync.app.presentation.screen.history.PriceHistoryScreen
 import com.warungsync.app.presentation.screen.itemlist.ItemListScreen
 import com.warungsync.app.presentation.screen.jointoko.JoinTokoScreen
 import com.warungsync.app.presentation.screen.master.MasterDataScreen
+import com.warungsync.app.presentation.screen.master.MasterDataSection
 import com.warungsync.app.presentation.screen.onboarding.OnboardingScreen
 import com.warungsync.app.presentation.screen.tokolist.TokoListScreen
 import com.warungsync.app.presentation.screen.tokosettings.TokoSettingsScreen
@@ -42,6 +61,7 @@ import com.warungsync.app.presentation.theme.MulyaSyncTheme
 import com.warungsync.app.presentation.viewmodel.MainViewModel
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
+import kotlinx.coroutines.launch
 
 enum class AppDestination {
     ONBOARDING,
@@ -118,10 +138,31 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // BackHandler untuk tombol back hardware / gesture swipe
+                BackHandler(enabled = currentDestination != AppDestination.TOKO_LIST && currentDestination != AppDestination.ONBOARDING) {
+                    when (currentDestination) {
+                        AppDestination.PRICE_HISTORY -> {
+                            viewModel.clearSelectedItemForHistory()
+                            currentDestination = AppDestination.TOKO_DASHBOARD
+                        }
+                        AppDestination.TOKO_SETTINGS -> {
+                            currentDestination = AppDestination.TOKO_DASHBOARD
+                        }
+                        AppDestination.CREATE_TOKO,
+                        AppDestination.JOIN_TOKO,
+                        AppDestination.TOKO_DASHBOARD -> {
+                            currentDestination = AppDestination.TOKO_LIST
+                        }
+                        else -> {
+                            currentDestination = AppDestination.TOKO_LIST
+                        }
+                    }
+                }
+
                 when (currentDestination) {
                     AppDestination.ONBOARDING -> {
                         OnboardingScreen(
-                            onComplete = { deviceName ->
+                            onDeviceNameSaved = { deviceName ->
                                 viewModel.setDeviceNameAndCompleteOnboarding(deviceName)
                                 currentDestination = AppDestination.TOKO_LIST
                             }
@@ -263,6 +304,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class StoreSection { CATALOG, DASHBOARD, ITEMS, CATEGORIES }
+
 @Composable
 fun TokoDashboard(
     currentToko: Toko,
@@ -295,36 +338,105 @@ fun TokoDashboard(
     onHistoryClick: (com.warungsync.app.domain.model.Item) -> Unit
 ) {
     val canAccessAdminTabs = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedSection by remember(currentToko.id) { mutableStateOf(StoreSection.CATALOG) }
+    val drawerState = androidx.compose.material3.rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.ListAlt, contentDescription = "Katalog") },
-                    label = { Text("Katalog") }
-                )
-                if (canAccessAdminTabs) {
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = { Icon(Icons.Default.Analytics, contentDescription = "Dashboard") },
-                        label = { Text("Dashboard") }
+    fun select(section: StoreSection) {
+        selectedSection = section
+        scope.launch { drawerState.close() }
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = true,
+        drawerContent = {
+            ModalDrawerSheet(modifier = Modifier.width(280.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .windowInsetsPadding(WindowInsets.safeDrawing)
+                        .padding(horizontal = 12.dp)
+                ) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = currentToko.namaToko,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Default.Inventory, contentDescription = "Master Data") },
-                        label = { Text("Master Data") }
+                    Text(
+                        text = "${currentToko.myRole.name} • ${currentToko.ownerDeviceName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
+                    HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                    NavigationDrawerItem(
+                        label = { Text("Katalog") },
+                        selected = selectedSection == StoreSection.CATALOG,
+                        onClick = { select(StoreSection.CATALOG) },
+                        icon = { Icon(Icons.Default.ListAlt, null) }
+                    )
+                    if (canAccessAdminTabs) {
+                        NavigationDrawerItem(
+                            label = { Text("Dashboard") },
+                            selected = selectedSection == StoreSection.DASHBOARD,
+                            onClick = { select(StoreSection.DASHBOARD) },
+                            icon = { Icon(Icons.Default.Analytics, null) }
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("Barang") },
+                            selected = selectedSection == StoreSection.ITEMS,
+                            onClick = { select(StoreSection.ITEMS) },
+                            icon = { Icon(Icons.Default.Inventory2, null) }
+                        )
+                        NavigationDrawerItem(
+                            label = { Text("Kategori") },
+                            selected = selectedSection == StoreSection.CATEGORIES,
+                            onClick = { select(StoreSection.CATEGORIES) },
+                            icon = { Icon(Icons.Default.Category, null) }
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    NavigationDrawerItem(
+                        label = { Text(if (isSyncing) "Menyinkronkan…" else "Sinkronkan sekarang") },
+                        selected = false,
+                        onClick = {
+                            onSyncClick()
+                            scope.launch { drawerState.close() }
+                        },
+                        icon = { Icon(Icons.Default.Sync, null) }
+                    )
+                    if (currentToko.myRole == MemberRole.OWNER) {
+                        NavigationDrawerItem(
+                            label = { Text("Pengaturan toko") },
+                            selected = false,
+                            onClick = onManageTokoClick,
+                            icon = { Icon(Icons.Default.Settings, null) }
+                        )
+                    }
+                    NavigationDrawerItem(
+                        label = { Text("Ganti toko") },
+                        selected = false,
+                        onClick = onBackToTokoList,
+                        icon = { Icon(Icons.Default.Store, null) }
+                    )
+                    lastSyncResult?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
                 }
             }
         }
-    ) { innerPadding ->
-        when (selectedTab) {
-            0 -> ItemListScreen(
+    ) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+            when (selectedSection) {
+            StoreSection.CATALOG -> ItemListScreen(
                 currentToko = currentToko,
                 items = items,
                 categories = categories,
@@ -338,10 +450,14 @@ fun TokoDashboard(
                 onSyncClick = onSyncClick,
                 onBackToTokoList = onBackToTokoList,
                 onManageTokoClick = onManageTokoClick,
+                onAddItem = onAddItem,
+                onEditItem = onUpdateItem,
+                onAddCategory = onAddCategory,
                 onItemClick = onHistoryClick,
-                onHistoryClick = onHistoryClick
+                onHistoryClick = onHistoryClick,
+                showHeader = false
             )
-            1 -> {
+            StoreSection.DASHBOARD -> {
                 if (canAccessAdminTabs) {
                     DashboardScreen(
                         currentToko = currentToko,
@@ -354,13 +470,14 @@ fun TokoDashboard(
                         onCustomRangeSelected = onCustomRangeSelected,
                         onAddChartItem = onAddChartItem,
                         onRemoveChartItem = onRemoveChartItem,
-                        onBackToTokoList = onBackToTokoList
+                        onBackToTokoList = onBackToTokoList,
+                        showHeader = false
                     )
                 } else {
-                    selectedTab = 0
+                    selectedSection = StoreSection.CATALOG
                 }
             }
-            2 -> {
+            StoreSection.ITEMS, StoreSection.CATEGORIES -> {
                 if (canAccessAdminTabs) {
                     MasterDataScreen(
                         currentToko = currentToko,
@@ -378,12 +495,16 @@ fun TokoDashboard(
                         onUpdateCategory = onUpdateCategory,
                         onDeleteCategory = onDeleteCategory,
                         onHistoryClick = onHistoryClick,
-                        onBackToTokoList = onBackToTokoList
+                        onBackToTokoList = onBackToTokoList,
+                        section = if (selectedSection == StoreSection.ITEMS) MasterDataSection.ITEMS else MasterDataSection.CATEGORIES,
+                        showHeader = false
                     )
                 } else {
-                    selectedTab = 0
+                    selectedSection = StoreSection.CATALOG
                 }
             }
+            }
+
         }
     }
 }

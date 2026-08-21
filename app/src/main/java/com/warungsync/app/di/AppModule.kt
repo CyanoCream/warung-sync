@@ -97,7 +97,7 @@ val appModule = module {
     single { NsdDiscoveryManager(androidContext()) }
     single { SyncServer(get(), get(), get(), get()) }
     single { SyncClient(get(), get()) }
-    single { SyncOrchestrator(androidContext(), get(), get(), get(), get()) }
+    single { SyncOrchestrator(get(), get(), get(), get()) }
 
     // ViewModel
     viewModel {

@@ -137,18 +137,18 @@ fun TokoListScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Buat toko pertama Anda secara gratis atau gabung ke toko rekan lewat WiFi.",
+                        text = "Buat toko baru atau gabung ke toko rekan melalui WiFi lokal.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(onClick = onCreateTokoClick) {
                             Text("Buat Toko")
                         }
                         OutlinedButton(onClick = onJoinTokoClick) {
-                            Text("Join Toko")
+                            Text("Gabung Toko")
                         }
                     }
                 }
@@ -354,17 +354,17 @@ fun RoleBadge(role: MemberRole) {
         MemberRole.OWNER -> Triple(
             MaterialTheme.colorScheme.primary,
             MaterialTheme.colorScheme.onPrimary,
-            "👑 OWNER"
+            "OWNER"
         )
         MemberRole.ADMIN -> Triple(
             MaterialTheme.colorScheme.secondary,
             MaterialTheme.colorScheme.onSecondary,
-            "🔧 ADMIN"
+            "ADMIN"
         )
         MemberRole.USER -> Triple(
             MaterialTheme.colorScheme.surfaceVariant,
             MaterialTheme.colorScheme.onSurfaceVariant,
-            "👁️ USER"
+            "VIEWER"
         )
     }
 
