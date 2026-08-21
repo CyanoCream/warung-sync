@@ -6,11 +6,13 @@ import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
+import com.warungsync.app.domain.model.ItemTrendData
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.PriceHistory
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.domain.model.TokoMember
+import com.warungsync.app.domain.model.TrendTimeframe
 import com.warungsync.app.domain.usecase.category.AddCategoryUseCase
 import com.warungsync.app.domain.usecase.category.DeleteCategoryUseCase
 import com.warungsync.app.domain.usecase.category.GetAllCategoriesUseCase
@@ -18,6 +20,7 @@ import com.warungsync.app.domain.usecase.category.UpdateCategoryUseCase
 import com.warungsync.app.domain.usecase.item.AddItemUseCase
 import com.warungsync.app.domain.usecase.item.DeleteItemUseCase
 import com.warungsync.app.domain.usecase.item.GetFilteredItemsUseCase
+import com.warungsync.app.domain.usecase.item.GetItemPriceTrendUseCase
 import com.warungsync.app.domain.usecase.item.GetPriceHistoryUseCase
 import com.warungsync.app.domain.usecase.item.UpdateItemUseCase
 import com.warungsync.app.domain.usecase.toko.CreateTokoUseCase
@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(
@@ -54,6 +58,7 @@ class MainViewModel(
     private val updateMemberRoleUseCase: UpdateMemberRoleUseCase,
     private val kickMemberUseCase: KickMemberUseCase,
     private val getFilteredItemsUseCase: GetFilteredItemsUseCase,
+    private val getItemPriceTrendUseCase: GetItemPriceTrendUseCase,
     private val addItemUseCase: AddItemUseCase,
     private val updateItemUseCase: UpdateItemUseCase,
     private val deleteItemUseCase: DeleteItemUseCase,
@@ -91,6 +96,12 @@ class MainViewModel(
         else getFilteredItemsUseCase(toko.id, filterState)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // All Items without filter (for Dashboard counts & search)
+    val allItems: StateFlow<List<Item>> = _activeToko.flatMapLatest { toko ->
+        if (toko == null) flowOf(emptyList())
+        else getFilteredItemsUseCase(toko.id, ItemFilter())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Categories for active toko
     val categories: StateFlow<List<Category>> = _activeToko.flatMapLatest { toko ->
         if (toko == null) flowOf(emptyList())
@@ -112,6 +123,64 @@ class MainViewModel(
     }.flatMapLatest { (toko, item) ->
         if (toko == null || item == null) flowOf(emptyList())
         else getPriceHistoryUseCase(toko.id, item.id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- Dashboard & Price Trend Watchlist ---
+    private val _selectedTrendTimeframe = MutableStateFlow(TrendTimeframe.THIS_MONTH)
+    val selectedTrendTimeframe: StateFlow<TrendTimeframe> = _selectedTrendTimeframe.asStateFlow()
+
+    private val _chartItemIds = MutableStateFlow<List<String>>(emptyList())
+    val chartItemIds: StateFlow<List<String>> = _chartItemIds.asStateFlow()
+
+    val trendCharts: StateFlow<List<ItemTrendData>> = combine(
+        _activeToko,
+        allItems,
+        _chartItemIds,
+        _selectedTrendTimeframe
+    ) { toko, itemsList, chartIds, timeframe ->
+        if (toko == null || itemsList.isEmpty()) return@combine emptyList<ItemTrendData>()
+
+        // Default: jika watchlist kosong, tampilkan hingga 3 barang pertama
+        val targetIds = if (chartIds.isEmpty()) itemsList.take(3).map { it.id } else chartIds
+        val targetItems = itemsList.filter { it.id in targetIds }
+
+        val cal = Calendar.getInstance()
+        val endTime = cal.timeInMillis
+        cal.add(Calendar.MONTH, -timeframe.monthsBack)
+        val startTime = cal.timeInMillis
+
+        targetItems.map { item ->
+            // Menghasilkan data tren langsung
+            val histFlow = getItemPriceTrendUseCase(toko.id, item, startTime, endTime)
+            // Ambil snapshot
+            ItemTrendData(
+                item = item,
+                initialPrice = item.harga,
+                currentPrice = item.harga,
+                priceChangeAmount = 0.0,
+                priceChangePercent = 0.0,
+                points = emptyList()
+            )
+        }
+    }.flatMapLatest { placeholderList ->
+        val toko = _activeToko.value
+        val itemsList = allItems.value
+        val chartIds = _chartItemIds.value
+        val timeframe = _selectedTrendTimeframe.value
+
+        if (toko == null || itemsList.isEmpty()) return@flatMapLatest flowOf(emptyList())
+
+        val targetIds = if (chartIds.isEmpty()) itemsList.take(3).map { it.id } else chartIds
+        val targetItems = itemsList.filter { it.id in targetIds }
+
+        val cal = Calendar.getInstance()
+        val endTime = cal.timeInMillis
+        cal.add(Calendar.MONTH, -timeframe.monthsBack)
+        val startTime = cal.timeInMillis
+
+        val flows = targetItems.map { getItemPriceTrendUseCase(toko.id, it, startTime, endTime) }
+        if (flows.isEmpty()) flowOf(emptyList())
+        else combine(flows) { it.toList() }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Discovered NSD peers for joining
@@ -148,6 +217,7 @@ class MainViewModel(
         _activeToko.value = toko
         prefs.activeTokoId = toko.id
         _filter.value = ItemFilter() // reset filter on toko change
+        _chartItemIds.value = emptyList() // reset dashboard watchlist to default
         syncOrchestrator.triggerSync()
     }
 
@@ -253,6 +323,34 @@ class MainViewModel(
                 }
             )
         }
+    }
+
+    // Dashboard Watchlist Chart Operations
+    fun setTrendTimeframe(timeframe: TrendTimeframe) {
+        _selectedTrendTimeframe.value = timeframe
+    }
+
+    fun addChartItem(item: Item) {
+        val current = _chartItemIds.value.toMutableList()
+        if (current.isEmpty()) {
+            // Jika sebelumnya default, populate dulu existing item ids
+            val defaultIds = allItems.value.take(3).map { it.id }
+            current.addAll(defaultIds)
+        }
+        if (item.id !in current) {
+            current.add(item.id)
+            _chartItemIds.value = current
+        }
+    }
+
+    fun removeChartItem(itemId: String) {
+        val current = _chartItemIds.value.toMutableList()
+        if (current.isEmpty()) {
+            val defaultIds = allItems.value.take(3).map { it.id }
+            current.addAll(defaultIds)
+        }
+        current.remove(itemId)
+        _chartItemIds.value = current
     }
 
     // Filter & Search Operations

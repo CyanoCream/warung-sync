@@ -29,4 +29,5 @@ interface ItemRepository {
 
     suspend fun deleteItem(id: String): Result<Unit>
     fun getPriceHistoryForItem(tokoId: String, itemId: String): Flow<List<PriceHistory>>
+    fun getPriceHistoryBetween(tokoId: String, itemId: String, startTime: Long, endTime: Long): Flow<List<PriceHistory>>
 }

@@ -10,11 +10,35 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PriceHistoryDao {
 
-    @Query("SELECT * FROM price_history WHERE tokoId = :tokoId AND itemId = :itemId ORDER BY changedAt DESC")
+    @Query("SELECT * FROM price_history WHERE tokoId = :tokoId AND itemId = :itemId ORDER BY changedAt ASC")
     fun getHistoryForItem(tokoId: String, itemId: String): Flow<List<PriceHistoryEntity>>
 
     @Query("SELECT * FROM price_history WHERE tokoId = :tokoId AND itemId = :itemId ORDER BY changedAt DESC")
     suspend fun getHistoryListForItem(tokoId: String, itemId: String): List<PriceHistoryEntity>
+
+    @Query("""
+        SELECT * FROM price_history 
+        WHERE tokoId = :tokoId AND itemId = :itemId AND changedAt >= :startTime AND changedAt <= :endTime 
+        ORDER BY changedAt ASC
+    """)
+    fun getPriceHistoryBetween(
+        tokoId: String,
+        itemId: String,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<PriceHistoryEntity>>
+
+    @Query("""
+        SELECT * FROM price_history 
+        WHERE tokoId = :tokoId AND itemId = :itemId AND changedAt >= :startTime AND changedAt <= :endTime 
+        ORDER BY changedAt ASC
+    """)
+    suspend fun getPriceHistoryListBetween(
+        tokoId: String,
+        itemId: String,
+        startTime: Long,
+        endTime: Long
+    ): List<PriceHistoryEntity>
 
     @Query("SELECT * FROM price_history WHERE tokoId = :tokoId AND changedAt > :since")
     suspend fun getHistoriesModifiedSince(tokoId: String, since: Long): List<PriceHistoryEntity>

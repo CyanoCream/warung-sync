@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Settings
@@ -17,7 +18,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -29,6 +29,7 @@ import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.network.sync.SyncOrchestrator
 import com.warungsync.app.presentation.screen.createtoko.CreateTokoScreen
+import com.warungsync.app.presentation.screen.dashboard.DashboardScreen
 import com.warungsync.app.presentation.screen.history.PriceHistoryScreen
 import com.warungsync.app.presentation.screen.itemlist.ItemListScreen
 import com.warungsync.app.presentation.screen.jointoko.JoinTokoScreen
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 val myTokos by viewModel.myTokos.collectAsState()
                 val activeToko by viewModel.activeToko.collectAsState()
                 val items by viewModel.items.collectAsState()
+                val allItems by viewModel.allItems.collectAsState()
                 val categories by viewModel.categories.collectAsState()
                 val filter by viewModel.filter.collectAsState()
                 val isSyncing by viewModel.isSyncing.collectAsState()
@@ -92,6 +94,8 @@ class MainActivity : ComponentActivity() {
                 val discoveredPeers by viewModel.discoveredPeers.collectAsState()
                 val isLoading by viewModel.isLoading.collectAsState()
                 val errorMessage by viewModel.errorMessage.collectAsState()
+                val trendCharts by viewModel.trendCharts.collectAsState()
+                val selectedTrendTimeframe by viewModel.selectedTrendTimeframe.collectAsState()
 
                 when (currentDestination) {
                     AppDestination.ONBOARDING -> {
@@ -190,10 +194,16 @@ class MainActivity : ComponentActivity() {
                             TokoDashboard(
                                 currentToko = currentToko,
                                 items = items,
+                                allItems = allItems,
                                 categories = categories,
                                 filter = filter,
                                 isSyncing = isSyncing,
                                 lastSyncResult = lastSyncResult,
+                                trendCharts = trendCharts,
+                                currentTimeframe = selectedTrendTimeframe,
+                                onTimeframeSelected = { viewModel.setTrendTimeframe(it) },
+                                onAddChartItem = { viewModel.addChartItem(it) },
+                                onRemoveChartItem = { viewModel.removeChartItem(it) },
                                 onSearchQueryChange = { viewModel.updateSearchQuery(it) },
                                 onCategorySelected = { viewModel.updateCategoryFilter(it) },
                                 onPriceRangeChanged = { min, max -> viewModel.updatePriceRange(min, max) },
@@ -230,10 +240,16 @@ class MainActivity : ComponentActivity() {
 fun TokoDashboard(
     currentToko: Toko,
     items: List<com.warungsync.app.domain.model.Item>,
+    allItems: List<com.warungsync.app.domain.model.Item>,
     categories: List<com.warungsync.app.domain.model.Category>,
     filter: com.warungsync.app.domain.model.ItemFilter,
     isSyncing: Boolean,
     lastSyncResult: String?,
+    trendCharts: List<com.warungsync.app.domain.model.ItemTrendData>,
+    currentTimeframe: com.warungsync.app.domain.model.TrendTimeframe,
+    onTimeframeSelected: (com.warungsync.app.domain.model.TrendTimeframe) -> Unit,
+    onAddChartItem: (com.warungsync.app.domain.model.Item) -> Unit,
+    onRemoveChartItem: (String) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onCategorySelected: (String?) -> Unit,
     onPriceRangeChanged: (Double?, Double?) -> Unit,
@@ -249,6 +265,7 @@ fun TokoDashboard(
     onDeleteCategory: (id: String) -> Unit,
     onHistoryClick: (com.warungsync.app.domain.model.Item) -> Unit
 ) {
+    val canAccessAdminTabs = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -260,12 +277,20 @@ fun TokoDashboard(
                     icon = { Icon(Icons.Default.ListAlt, contentDescription = "Katalog") },
                     label = { Text("Katalog") }
                 )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Inventory, contentDescription = "Master Data") },
-                    label = { Text("Master Data") }
-                )
+                if (canAccessAdminTabs) {
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        icon = { Icon(Icons.Default.Analytics, contentDescription = "Dashboard") },
+                        label = { Text("Dashboard") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        icon = { Icon(Icons.Default.Inventory, contentDescription = "Master Data") },
+                        label = { Text("Master Data") }
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -287,24 +312,47 @@ fun TokoDashboard(
                 onItemClick = onHistoryClick,
                 onHistoryClick = onHistoryClick
             )
-            1 -> MasterDataScreen(
-                currentToko = currentToko,
-                items = items,
-                categories = categories,
-                filter = filter,
-                onSearchQueryChange = onSearchQueryChange,
-                onCategorySelected = onCategorySelected,
-                onPriceRangeChanged = onPriceRangeChanged,
-                onSortChanged = onSortChanged,
-                onAddItem = onAddItem,
-                onUpdateItem = onUpdateItem,
-                onDeleteItem = onDeleteItem,
-                onAddCategory = onAddCategory,
-                onUpdateCategory = onUpdateCategory,
-                onDeleteCategory = onDeleteCategory,
-                onHistoryClick = onHistoryClick,
-                onBackToTokoList = onBackToTokoList
-            )
+            1 -> {
+                if (canAccessAdminTabs) {
+                    DashboardScreen(
+                        currentToko = currentToko,
+                        allItems = allItems,
+                        categories = categories,
+                        trendCharts = trendCharts,
+                        currentTimeframe = currentTimeframe,
+                        onTimeframeSelected = onTimeframeSelected,
+                        onAddChartItem = onAddChartItem,
+                        onRemoveChartItem = onRemoveChartItem,
+                        onBackToTokoList = onBackToTokoList
+                    )
+                } else {
+                    selectedTab = 0
+                }
+            }
+            2 -> {
+                if (canAccessAdminTabs) {
+                    MasterDataScreen(
+                        currentToko = currentToko,
+                        items = items,
+                        categories = categories,
+                        filter = filter,
+                        onSearchQueryChange = onSearchQueryChange,
+                        onCategorySelected = onCategorySelected,
+                        onPriceRangeChanged = onPriceRangeChanged,
+                        onSortChanged = onSortChanged,
+                        onAddItem = onAddItem,
+                        onUpdateItem = onUpdateItem,
+                        onDeleteItem = onDeleteItem,
+                        onAddCategory = onAddCategory,
+                        onUpdateCategory = onUpdateCategory,
+                        onDeleteCategory = onDeleteCategory,
+                        onHistoryClick = onHistoryClick,
+                        onBackToTokoList = onBackToTokoList
+                    )
+                } else {
+                    selectedTab = 0
+                }
+            }
         }
     }
 }

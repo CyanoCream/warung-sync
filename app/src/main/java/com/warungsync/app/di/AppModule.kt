@@ -19,6 +19,7 @@ import com.warungsync.app.domain.usecase.category.UpdateCategoryUseCase
 import com.warungsync.app.domain.usecase.item.AddItemUseCase
 import com.warungsync.app.domain.usecase.item.DeleteItemUseCase
 import com.warungsync.app.domain.usecase.item.GetFilteredItemsUseCase
+import com.warungsync.app.domain.usecase.item.GetItemPriceTrendUseCase
 import com.warungsync.app.domain.usecase.item.GetPriceHistoryUseCase
 import com.warungsync.app.domain.usecase.item.UpdateItemUseCase
 import com.warungsync.app.domain.usecase.sync.SyncWithPeerUseCase
@@ -79,8 +80,9 @@ val appModule = module {
     factory { UpdateMemberRoleUseCase(get()) }
     factory { KickMemberUseCase(get()) }
 
-    // Use Cases Item & Category & Sync
+    // Use Cases Item & Category & Sync & Trend
     factory { GetFilteredItemsUseCase(get()) }
+    factory { GetItemPriceTrendUseCase(get()) }
     factory { AddItemUseCase(get(), get()) }
     factory { UpdateItemUseCase(get(), get()) }
     factory { DeleteItemUseCase(get(), get()) }
@@ -109,6 +111,7 @@ val appModule = module {
             updateMemberRoleUseCase = get(),
             kickMemberUseCase = get(),
             getFilteredItemsUseCase = get(),
+            getItemPriceTrendUseCase = get(),
             addItemUseCase = get(),
             updateItemUseCase = get(),
             deleteItemUseCase = get(),

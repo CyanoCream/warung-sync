@@ -10,6 +10,7 @@ import com.warungsync.app.data.mapper.toDomain
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
 import com.warungsync.app.domain.model.PriceHistory
+import com.warungsync.app.domain.repository.ItemRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
@@ -167,6 +168,17 @@ class ItemRepositoryImpl(
 
     override fun getPriceHistoryForItem(tokoId: String, itemId: String): Flow<List<PriceHistory>> {
         return priceHistoryDao.getHistoryForItem(tokoId, itemId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    override fun getPriceHistoryBetween(
+        tokoId: String,
+        itemId: String,
+        startTime: Long,
+        endTime: Long
+    ): Flow<List<PriceHistory>> {
+        return priceHistoryDao.getPriceHistoryBetween(tokoId, itemId, startTime, endTime).map { entities ->
             entities.map { it.toDomain() }
         }
     }
