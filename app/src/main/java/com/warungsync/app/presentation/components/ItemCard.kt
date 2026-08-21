@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.warungsync.app.domain.model.Item
 import java.text.NumberFormat
 import java.util.Locale
@@ -79,13 +80,13 @@ fun ItemCard(
                     item.categoryName?.let { categoryName ->
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            color = Color(item.categoryColorArgb),
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
                             Text(
                                 text = categoryName,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = Color.White,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

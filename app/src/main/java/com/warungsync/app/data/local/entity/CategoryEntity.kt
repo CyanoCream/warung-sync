@@ -25,6 +25,7 @@ data class CategoryEntity(
     val id: String,
     val tokoId: String,
     val namaKategori: String,
+    val colorArgb: Int = -11581723,
     val updatedAt: Long,
     val updatedByDevice: String,
     val isDeleted: Boolean = false

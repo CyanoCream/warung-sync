@@ -430,19 +430,19 @@ class MainViewModel(
     }
 
     // Category Operations
-    fun addCategory(nama: String) {
+    fun addCategory(nama: String, colorArgb: Int) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            addCategoryUseCase(tokoId, nama).onFailure {
+            addCategoryUseCase(tokoId, nama, colorArgb).onFailure {
                 _errorMessage.value = it.message
             }
         }
     }
 
-    fun updateCategory(id: String, nama: String) {
+    fun updateCategory(id: String, nama: String, colorArgb: Int) {
         val tokoId = _activeToko.value?.id ?: return
         viewModelScope.launch {
-            updateCategoryUseCase(tokoId, id, nama).onFailure {
+            updateCategoryUseCase(tokoId, id, nama, colorArgb).onFailure {
                 _errorMessage.value = it.message
             }
         }

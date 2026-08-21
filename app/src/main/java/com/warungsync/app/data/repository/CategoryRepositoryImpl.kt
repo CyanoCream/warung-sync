@@ -27,7 +27,7 @@ class CategoryRepositoryImpl(
         return categoryDao.getCategoryById(id)?.toDomain()
     }
 
-    override suspend fun addCategory(tokoId: String, namaKategori: String): Result<Category> {
+    override suspend fun addCategory(tokoId: String, namaKategori: String, colorArgb: Int): Result<Category> {
         val trimmedName = namaKategori.trim()
         if (trimmedName.isBlank()) {
             return Result.failure(IllegalArgumentException("Nama kategori tidak boleh kosong"))
@@ -43,6 +43,7 @@ class CategoryRepositoryImpl(
             id = UUID.randomUUID().toString(),
             tokoId = tokoId,
             namaKategori = trimmedName,
+            colorArgb = colorArgb,
             updatedAt = now,
             updatedByDevice = prefs.deviceId,
             isDeleted = false
@@ -51,7 +52,7 @@ class CategoryRepositoryImpl(
         return Result.success(entity.toDomain())
     }
 
-    override suspend fun updateCategory(tokoId: String, id: String, namaKategori: String): Result<Category> {
+    override suspend fun updateCategory(tokoId: String, id: String, namaKategori: String, colorArgb: Int): Result<Category> {
         val trimmedName = namaKategori.trim()
         if (trimmedName.isBlank()) {
             return Result.failure(IllegalArgumentException("Nama kategori tidak boleh kosong"))
@@ -67,6 +68,7 @@ class CategoryRepositoryImpl(
 
         val updated = current.copy(
             namaKategori = trimmedName,
+            colorArgb = colorArgb,
             updatedAt = System.currentTimeMillis(),
             updatedByDevice = prefs.deviceId
         )

@@ -9,6 +9,7 @@ data class Item(
     val satuan: String,
     val categoryId: String,
     val categoryName: String? = null,
+    val categoryColorArgb: Int = DEFAULT_CATEGORY_COLOR_ARGB,
     val updatedAt: Long,
     val updatedByDevice: String
 )

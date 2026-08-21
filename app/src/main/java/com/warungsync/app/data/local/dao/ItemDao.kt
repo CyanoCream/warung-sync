@@ -17,6 +17,7 @@ data class ItemWithCategoryName(
     val satuan: String,
     val categoryId: String,
     val categoryName: String?,
+    val categoryColorArgb: Int,
     val updatedAt: Long,
     val updatedByDevice: String,
     val isDeleted: Boolean
@@ -27,7 +28,8 @@ interface ItemDao {
 
     @Query("""
         SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, 
-               i.categoryId, c.namaKategori AS categoryName, 
+               i.categoryId, c.namaKategori AS categoryName,
+               COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
         FROM items i
         LEFT JOIN categories c ON i.categoryId = c.id
@@ -60,7 +62,8 @@ interface ItemDao {
 
     @Query("""
         SELECT i.id, i.tokoId, i.namaBarang, i.deskripsi, i.harga, i.satuan, 
-               i.categoryId, c.namaKategori AS categoryName, 
+               i.categoryId, c.namaKategori AS categoryName,
+               COALESCE(c.colorArgb, -11581723) AS categoryColorArgb,
                i.updatedAt, i.updatedByDevice, i.isDeleted
         FROM items i
         LEFT JOIN categories c ON i.categoryId = c.id

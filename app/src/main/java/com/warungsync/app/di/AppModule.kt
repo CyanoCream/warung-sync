@@ -1,6 +1,8 @@
 package com.warungsync.app.di
 
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.warungsync.app.auth.TotpManager
 import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.data.local.WarungSyncDatabase
@@ -40,6 +42,14 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE categories ADD COLUMN colorArgb INTEGER NOT NULL DEFAULT -11581723"
+        )
+    }
+}
+
 val appModule = module {
 
     // Preferences & Auth
@@ -53,6 +63,7 @@ val appModule = module {
             WarungSyncDatabase::class.java,
             "warungsync_database"
         )
+            .addMigrations(MIGRATION_1_2)
             .fallbackToDestructiveMigration()
             .build()
     }

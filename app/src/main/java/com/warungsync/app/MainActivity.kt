@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Category
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,10 +49,12 @@ import androidx.compose.ui.unit.dp
 import com.warungsync.app.domain.model.MemberRole
 import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.network.sync.SyncOrchestrator
+import com.warungsync.app.data.local.DevicePreferences
 import com.warungsync.app.presentation.screen.createtoko.CreateTokoScreen
 import com.warungsync.app.presentation.screen.dashboard.DashboardScreen
 import com.warungsync.app.presentation.screen.history.PriceHistoryScreen
 import com.warungsync.app.presentation.screen.itemlist.ItemListScreen
+import com.warungsync.app.presentation.components.ProductFilterDrawer
 import com.warungsync.app.presentation.screen.jointoko.JoinTokoScreen
 import com.warungsync.app.presentation.screen.master.MasterDataScreen
 import com.warungsync.app.presentation.screen.master.MasterDataSection
@@ -58,6 +62,7 @@ import com.warungsync.app.presentation.screen.onboarding.OnboardingScreen
 import com.warungsync.app.presentation.screen.tokolist.TokoListScreen
 import com.warungsync.app.presentation.screen.tokosettings.TokoSettingsScreen
 import com.warungsync.app.presentation.theme.MulyaSyncTheme
+import com.warungsync.app.presentation.theme.AppThemeMode
 import com.warungsync.app.presentation.viewmodel.MainViewModel
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
@@ -76,13 +81,23 @@ enum class AppDestination {
 class MainActivity : ComponentActivity() {
 
     private val syncOrchestrator: SyncOrchestrator by inject()
+    private val devicePreferences: DevicePreferences by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
-            MulyaSyncTheme {
+            var themeMode by remember {
+                mutableStateOf(AppThemeMode.fromStored(devicePreferences.themeMode))
+            }
+            val useDarkTheme = when (themeMode) {
+                AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+                AppThemeMode.LIGHT -> false
+                AppThemeMode.DARK -> true
+            }
+
+            MulyaSyncTheme(darkTheme = useDarkTheme) {
                 val viewModel: MainViewModel = koinViewModel()
                 val prefs = viewModel.prefs
 
@@ -286,9 +301,14 @@ class MainActivity : ComponentActivity() {
                                     viewModel.updateItem(id, nama, deskripsi, harga, satuan, catId)
                                 },
                                 onDeleteItem = { viewModel.deleteItem(it) },
-                                onAddCategory = { viewModel.addCategory(it) },
-                                onUpdateCategory = { id, nama -> viewModel.updateCategory(id, nama) },
+                                onAddCategory = { nama, color -> viewModel.addCategory(nama, color) },
+                                onUpdateCategory = { id, nama, color -> viewModel.updateCategory(id, nama, color) },
                                 onDeleteCategory = { viewModel.deleteCategory(it) },
+                                themeMode = themeMode,
+                                onThemeModeChange = { mode ->
+                                    themeMode = mode
+                                    devicePreferences.themeMode = mode.name
+                                },
                                 onHistoryClick = { item ->
                                     viewModel.selectItemForHistory(item)
                                     currentDestination = AppDestination.PRICE_HISTORY
@@ -332,9 +352,11 @@ fun TokoDashboard(
     onAddItem: (nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
     onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
     onDeleteItem: (id: String) -> Unit,
-    onAddCategory: (String) -> Unit,
-    onUpdateCategory: (id: String, String) -> Unit,
+    onAddCategory: (String, Int) -> Unit,
+    onUpdateCategory: (id: String, String, Int) -> Unit,
     onDeleteCategory: (id: String) -> Unit,
+    themeMode: AppThemeMode,
+    onThemeModeChange: (AppThemeMode) -> Unit,
     onHistoryClick: (com.warungsync.app.domain.model.Item) -> Unit
 ) {
     val canAccessAdminTabs = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
@@ -372,7 +394,7 @@ fun TokoDashboard(
                     )
                     HorizontalDivider(Modifier.padding(vertical = 12.dp))
                     NavigationDrawerItem(
-                        label = { Text("Katalog") },
+                        label = { Text("Daftar Produk") },
                         selected = selectedSection == StoreSection.CATALOG,
                         onClick = { select(StoreSection.CATALOG) },
                         icon = { Icon(Icons.Default.ListAlt, null) }
@@ -398,6 +420,24 @@ fun TokoDashboard(
                         )
                     }
                     Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "Tema",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    )
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+                    ) {
+                        AppThemeMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = themeMode == mode,
+                                onClick = { onThemeModeChange(mode) },
+                                label = { Text(mode.label, style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     NavigationDrawerItem(
                         label = { Text(if (isSyncing) "Menyinkronkan…" else "Sinkronkan sekarang") },
@@ -436,7 +476,16 @@ fun TokoDashboard(
     ) {
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
             when (selectedSection) {
-            StoreSection.CATALOG -> ItemListScreen(
+            StoreSection.CATALOG -> ProductFilterDrawer(
+                categories = categories,
+                selectedCategoryId = filter.categoryId,
+                minPrice = filter.minHarga,
+                maxPrice = filter.maxHarga,
+                currentSort = filter.sortBy,
+                onCategorySelected = onCategorySelected,
+                onPriceRangeChanged = onPriceRangeChanged,
+                onSortChanged = onSortChanged
+            ) { ItemListScreen(
                 currentToko = currentToko,
                 items = items,
                 categories = categories,
@@ -450,13 +499,10 @@ fun TokoDashboard(
                 onSyncClick = onSyncClick,
                 onBackToTokoList = onBackToTokoList,
                 onManageTokoClick = onManageTokoClick,
-                onAddItem = onAddItem,
-                onEditItem = onUpdateItem,
-                onAddCategory = onAddCategory,
-                onItemClick = onHistoryClick,
                 onHistoryClick = onHistoryClick,
-                showHeader = false
-            )
+                showHeader = false,
+                searchOnly = true
+            ) }
             StoreSection.DASHBOARD -> {
                 if (canAccessAdminTabs) {
                     DashboardScreen(

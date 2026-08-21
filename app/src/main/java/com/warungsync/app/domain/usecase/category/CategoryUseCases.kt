@@ -15,12 +15,12 @@ class AddCategoryUseCase(
     private val categoryRepository: CategoryRepository,
     private val tokoRepository: TokoRepository
 ) {
-    suspend operator fun invoke(tokoId: String, namaKategori: String): Result<Category> {
+    suspend operator fun invoke(tokoId: String, namaKategori: String, colorArgb: Int): Result<Category> {
         val role = tokoRepository.getMyRole(tokoId)
         if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
             return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat menambah kategori"))
         }
-        return categoryRepository.addCategory(tokoId, namaKategori)
+        return categoryRepository.addCategory(tokoId, namaKategori, colorArgb)
     }
 }
 
@@ -28,12 +28,12 @@ class UpdateCategoryUseCase(
     private val categoryRepository: CategoryRepository,
     private val tokoRepository: TokoRepository
 ) {
-    suspend operator fun invoke(tokoId: String, id: String, namaKategori: String): Result<Category> {
+    suspend operator fun invoke(tokoId: String, id: String, namaKategori: String, colorArgb: Int): Result<Category> {
         val role = tokoRepository.getMyRole(tokoId)
         if (role != MemberRole.OWNER && role != MemberRole.ADMIN) {
             return Result.failure(IllegalStateException("Hanya Pemilik Toko atau Admin yang dapat mengedit kategori"))
         }
-        return categoryRepository.updateCategory(tokoId, id, namaKategori)
+        return categoryRepository.updateCategory(tokoId, id, namaKategori, colorArgb)
     }
 }
 

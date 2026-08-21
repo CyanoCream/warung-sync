@@ -1,6 +1,8 @@
 package com.warungsync.app.presentation.screen.master
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
@@ -38,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -54,6 +60,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -68,11 +75,13 @@ import com.warungsync.app.presentation.components.ItemCard
 import com.warungsync.app.presentation.components.SearchAndFilterRow
 import com.warungsync.app.presentation.screen.additem.AddEditItemSheet
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
+import com.warungsync.app.presentation.theme.CategoryColorPalette
+import com.warungsync.app.domain.model.DEFAULT_CATEGORY_COLOR_ARGB
 import kotlinx.coroutines.launch
 
 enum class MasterDataSection { BOTH, ITEMS, CATEGORIES }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun MasterDataScreen(
     currentToko: Toko,
@@ -86,8 +95,8 @@ fun MasterDataScreen(
     onAddItem: (nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
     onUpdateItem: (id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit,
     onDeleteItem: (id: String) -> Unit,
-    onAddCategory: (String) -> Unit,
-    onUpdateCategory: (id: String, String) -> Unit,
+    onAddCategory: (String, Int) -> Unit,
+    onUpdateCategory: (id: String, String, Int) -> Unit,
     onDeleteCategory: (id: String) -> Unit,
     onHistoryClick: (Item) -> Unit,
     onBackToTokoList: () -> Unit,
@@ -355,6 +364,9 @@ fun MasterDataScreen(
     // Dialog Tambah/Edit Kategori
     if (showAddCategoryDialog || categoryToEdit != null) {
         var inputName by remember(categoryToEdit) { mutableStateOf(categoryToEdit?.namaKategori ?: "") }
+        var selectedColor by remember(categoryToEdit) {
+            mutableIntStateOf(categoryToEdit?.colorArgb ?: DEFAULT_CATEGORY_COLOR_ARGB)
+        }
         var catError by remember { mutableStateOf<String?>(null) }
 
         AlertDialog(
@@ -376,6 +388,26 @@ fun MasterDataScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Warna label", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CategoryColorPalette.forEach { argb ->
+                            Surface(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable { selectedColor = argb },
+                                shape = CircleShape,
+                                color = Color(argb),
+                                border = if (selectedColor == argb) {
+                                    BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
+                                } else null
+                            ) {}
+                        }
+                    }
                     catError?.let {
                         Text(
                             text = it,
@@ -393,9 +425,9 @@ fun MasterDataScreen(
                             catError = "Nama kategori tidak boleh kosong"
                         } else {
                             if (categoryToEdit != null) {
-                                onUpdateCategory(categoryToEdit!!.id, inputName.trim())
+                                onUpdateCategory(categoryToEdit!!.id, inputName.trim(), selectedColor)
                             } else {
-                                onAddCategory(inputName.trim())
+                                onAddCategory(inputName.trim(), selectedColor)
                             }
                             showAddCategoryDialog = false
                             categoryToEdit = null
@@ -571,11 +603,18 @@ fun MasterCategoriesTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = category.namaKategori,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(category.colorArgb)
+                        ) {
+                            Text(
+                                text = category.namaKategori,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
 
                         Row {
                             IconButton(onClick = { onEditCategory(category) }) {

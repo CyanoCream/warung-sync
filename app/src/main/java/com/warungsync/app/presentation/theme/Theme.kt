@@ -7,6 +7,17 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
+enum class AppThemeMode(val label: String) {
+    SYSTEM("Sistem"),
+    LIGHT("Terang"),
+    DARK("Gelap");
+
+    companion object {
+        fun fromStored(value: String): AppThemeMode =
+            entries.firstOrNull { it.name == value } ?: SYSTEM
+    }
+}
+
 private val DarkColorScheme = darkColorScheme(
     primary = IndigoPrimaryLight,
     onPrimary = Color(0xFF0F172A),

@@ -1,6 +1,8 @@
 package com.warungsync.app.presentation.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -30,27 +37,38 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.presentation.util.formatThousandsInput
 import com.warungsync.app.presentation.util.parseThousandsInput
+import kotlinx.coroutines.launch
 
 /**
  * Search Bar sejajar dengan Tombol Filter Modal Popup.
@@ -277,6 +295,173 @@ fun SearchAndFilterRow(
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
+            }
+        }
+    }
+}
+
+/** Right-edge swipe drawer used by the read-only product list. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun ProductFilterDrawer(
+    categories: List<Category>,
+    selectedCategoryId: String?,
+    minPrice: Double?,
+    maxPrice: Double?,
+    currentSort: SortBy,
+    onCategorySelected: (String?) -> Unit,
+    onPriceRangeChanged: (Double?, Double?) -> Unit,
+    onSortChanged: (SortBy) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var tempCategory by remember(selectedCategoryId) { mutableStateOf(selectedCategoryId) }
+    var tempMin by remember(minPrice) {
+        mutableStateOf(minPrice?.toLong()?.toString()?.let(::formatThousandsInput) ?: "")
+    }
+    var tempMax by remember(maxPrice) {
+        mutableStateOf(maxPrice?.toLong()?.toString()?.let(::formatThousandsInput) ?: "")
+    }
+    var tempSort by remember(currentSort) { mutableStateOf(currentSort) }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            // When closed, use the edge-only detector below so this nested
+            // drawer cannot steal the left drawer's gesture.
+            gesturesEnabled = drawerState.isOpen,
+            drawerContent = {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
+                                .padding(16.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Filter", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = {
+                                    tempCategory = null
+                                    tempMin = ""
+                                    tempMax = ""
+                                    tempSort = SortBy.DATE_DESC
+                                }) { Text("Reset") }
+                            }
+
+                            Text("Urutkan", style = MaterialTheme.typography.labelMedium)
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                SortBy.entries.forEach { sort ->
+                                    FilterChip(
+                                        selected = tempSort == sort,
+                                        onClick = { tempSort = sort },
+                                        label = { Text(sort.label, style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.height(32.dp)
+                                    )
+                                }
+                            }
+
+                            if (categories.isNotEmpty()) {
+                                Spacer(Modifier.height(12.dp))
+                                Text("Kategori", style = MaterialTheme.typography.labelMedium)
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    FilterChip(
+                                        selected = tempCategory == null,
+                                        onClick = { tempCategory = null },
+                                        label = { Text("Semua", style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.height(32.dp)
+                                    )
+                                    categories.forEach { category ->
+                                        FilterChip(
+                                            selected = tempCategory == category.id,
+                                            onClick = { tempCategory = category.id },
+                                            label = { Text(category.namaKategori, style = MaterialTheme.typography.labelSmall) },
+                                            modifier = Modifier.height(32.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+                            Text("Rentang harga", style = MaterialTheme.typography.labelMedium)
+                            Spacer(Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = tempMin,
+                                    onValueChange = { tempMin = formatThousandsInput(it) },
+                                    label = { Text("Minimum") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = tempMax,
+                                    onValueChange = { tempMax = formatThousandsInput(it) },
+                                    label = { Text("Maksimum") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    onCategorySelected(tempCategory)
+                                    onPriceRangeChanged(parseThousandsInput(tempMin), parseThousandsInput(tempMax))
+                                    onSortChanged(tempSort)
+                                    scope.launch { drawerState.close() }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Terapkan") }
+                        }
+                    }
+                }
+            }
+        ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(drawerState) {
+                            val edgeWidth = 32.dp.toPx()
+                            val openThreshold = 56.dp.toPx()
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                if (down.position.x < size.width - edgeWidth) {
+                                    return@awaitEachGesture
+                                }
+
+                                var horizontalDrag = 0f
+                                var pointerPressed = true
+                                while (pointerPressed) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    horizontalDrag += change.positionChange().x
+                                    pointerPressed = change.pressed
+                                    if (horizontalDrag <= -openThreshold) {
+                                        change.consume()
+                                        scope.launch { drawerState.open() }
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                ) {
+                    content()
+                }
             }
         }
     }

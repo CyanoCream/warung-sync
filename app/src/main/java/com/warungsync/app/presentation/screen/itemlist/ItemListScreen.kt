@@ -20,19 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.Item
 import com.warungsync.app.domain.model.ItemFilter
@@ -58,7 +54,7 @@ import com.warungsync.app.domain.model.Toko
 import com.warungsync.app.presentation.components.EmptyStateView
 import com.warungsync.app.presentation.components.ItemCard
 import com.warungsync.app.presentation.components.SearchAndFilterRow
-import com.warungsync.app.presentation.screen.additem.AddEditItemSheet
+import com.warungsync.app.presentation.components.SearchBar
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,18 +74,11 @@ fun ItemListScreen(
     onSyncClick: () -> Unit,
     onBackToTokoList: () -> Unit,
     onManageTokoClick: () -> Unit,
-    onAddItem: ((nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit)? = null,
-    onEditItem: ((id: String, nama: String, deskripsi: String?, harga: Double, satuan: String, categoryId: String) -> Unit)? = null,
-    onAddCategory: ((String) -> Unit)? = null,
-    onItemClick: (Item) -> Unit,
     onHistoryClick: (Item) -> Unit,
-    showHeader: Boolean = true
+    showHeader: Boolean = true,
+    searchOnly: Boolean = false
 ) {
-    val canManage = currentToko.myRole == MemberRole.OWNER || currentToko.myRole == MemberRole.ADMIN
-    var showAddItemSheet by remember { mutableStateOf(false) }
-    var itemToEdit by remember { mutableStateOf<Item?>(null) }
-    var showAddCategoryDialog by remember { mutableStateOf(false) }
-    var newCategoryName by remember { mutableStateOf("") }
+    var selectedItemForDetail by remember { mutableStateOf<Item?>(null) }
 
     Scaffold(
         topBar = {
@@ -145,18 +134,26 @@ fun ItemListScreen(
                 .padding(paddingValues)
         ) {
             // Search Bar sejajar dengan Filter Popup Modal
-            SearchAndFilterRow(
-                searchQuery = filter.searchQuery,
-                onSearchQueryChange = onSearchQueryChange,
-                categories = categories,
-                selectedCategoryId = filter.categoryId,
-                onCategorySelected = onCategorySelected,
-                minPrice = filter.minHarga,
-                maxPrice = filter.maxHarga,
-                onPriceRangeChanged = onPriceRangeChanged,
-                currentSort = filter.sortBy,
-                onSortChanged = onSortChanged
-            )
+            if (searchOnly) {
+                SearchBar(
+                    query = filter.searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            } else {
+                SearchAndFilterRow(
+                    searchQuery = filter.searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    categories = categories,
+                    selectedCategoryId = filter.categoryId,
+                    onCategorySelected = onCategorySelected,
+                    minPrice = filter.minHarga,
+                    maxPrice = filter.maxHarga,
+                    onPriceRangeChanged = onPriceRangeChanged,
+                    currentSort = filter.sortBy,
+                    onSortChanged = onSortChanged
+                )
+            }
 
             // List Items
             if (items.isEmpty()) {
@@ -186,14 +183,8 @@ fun ItemListScreen(
                     items(items, key = { it.id }) { item ->
                         ItemCard(
                             item = item,
-                            onItemClick = {
-                                if (canManage && onEditItem != null) {
-                                    itemToEdit = item
-                                } else {
-                                    onItemClick(item)
-                                }
-                            },
-                            onEditClick = if (canManage && onEditItem != null) { { itemToEdit = item } } else null,
+                            onItemClick = { selectedItemForDetail = item },
+                            onEditClick = null,
                             onHistoryClick = { onHistoryClick(item) }
                         )
                     }
@@ -202,75 +193,44 @@ fun ItemListScreen(
         }
     }
 
-    // Modal Sheet Tambah / Edit Barang Langsung dari Halaman Katalog
-    if (showAddItemSheet || itemToEdit != null) {
-        AddEditItemSheet(
-            categories = categories,
-            editingItem = itemToEdit,
-            onDismiss = {
-                showAddItemSheet = false
-                itemToEdit = null
-            },
-            onSave = { nama, deskripsi, harga, satuan, catId ->
-                if (itemToEdit != null) {
-                    onEditItem?.invoke(itemToEdit!!.id, nama, deskripsi, harga, satuan, catId)
-                } else {
-                    onAddItem?.invoke(nama, deskripsi, harga, satuan, catId)
-                }
-                showAddItemSheet = false
-                itemToEdit = null
-            }
-        )
-    }
-
-    // Dialog Buat Kategori Pertama jika belum ada kategori
-    if (showAddCategoryDialog) {
+    selectedItemForDetail?.let { item ->
         AlertDialog(
-            onDismissRequest = {
-                showAddCategoryDialog = false
-                newCategoryName = ""
-            },
-            title = { Text("Buat Kategori Pertama") },
+            onDismissRequest = { selectedItemForDetail = null },
+            title = { Text(item.namaBarang, fontWeight = FontWeight.Bold) },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item.categoryName?.let { categoryName ->
+                        androidx.compose.material3.Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = Color(item.categoryColorArgb)
+                        ) {
+                            Text(
+                                text = categoryName,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
                     Text(
-                        text = "Barang membutuhkan minimal 1 kategori (misal: Sembako, Minuman, Makanan Ringan).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Rp %,d / %s".format(item.harga.toLong(), item.satuan),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = newCategoryName,
-                        onValueChange = { newCategoryName = it },
-                        label = { Text("Nama Kategori") },
-                        placeholder = { Text("Contoh: Sembako") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (!item.deskripsi.isNullOrBlank()) {
+                        Text(item.deskripsi, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (newCategoryName.isNotBlank()) {
-                            onAddCategory?.invoke(newCategoryName.trim())
-                            showAddCategoryDialog = false
-                            newCategoryName = ""
-                            showAddItemSheet = true
-                        }
-                    },
-                    enabled = newCategoryName.isNotBlank()
-                ) {
-                    Text("Simpan & Lanjut Tambah Barang")
-                }
+                TextButton(onClick = {
+                    selectedItemForDetail = null
+                    onHistoryClick(item)
+                }) { Text("Riwayat harga") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showAddCategoryDialog = false
-                    newCategoryName = ""
-                }) {
-                    Text("Batal")
-                }
+                TextButton(onClick = { selectedItemForDetail = null }) { Text("Tutup") }
             }
         )
     }
