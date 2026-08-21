@@ -17,23 +17,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -510,37 +513,60 @@ fun TokoDashboard(
                     )
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
                     ) {
                         AppThemeMode.entries.forEach { mode ->
-                            FilterChip(
-                                selected = themeMode == mode,
+                            val selected = themeMode == mode
+                            androidx.compose.material3.Surface(
+                                modifier = Modifier.size(36.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                },
                                 onClick = { onThemeModeChange(mode) },
-                                label = { Text(mode.label, style = MaterialTheme.typography.labelSmall) }
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = when (mode) {
+                                        AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                                        AppThemeMode.LIGHT -> Icons.Default.LightMode
+                                        AppThemeMode.DARK -> Icons.Default.DarkMode
+                                    },
+                                    contentDescription = mode.label,
+                                    tint = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    modifier = Modifier.padding(9.dp)
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    NavigationDrawerItem(
-                        label = { Text(if (isSyncing) "Menyinkronkan…" else "Sinkronkan sekarang") },
-                        selected = false,
-                        onClick = {
-                            onSyncClick()
-                            scope.launch { drawerState.close() }
-                        },
-                        icon = { Icon(Icons.Default.Sync, null) }
-                    )
-                    NavigationDrawerItem(
-                        label = { Text(if (isDataTransferRunning) "Memproses data…" else "Export backup CSV") },
-                        selected = false,
-                        onClick = {
-                            if (!isDataTransferRunning) {
-                                onExportData()
+                    if (canAccessAdminTabs) {
+                        NavigationDrawerItem(
+                            label = { Text(if (isSyncing) "Menyinkronkan…" else "Sinkronkan sekarang") },
+                            selected = false,
+                            onClick = {
+                                onSyncClick()
                                 scope.launch { drawerState.close() }
-                            }
-                        },
-                        icon = { Icon(Icons.Default.FileDownload, null) }
-                    )
+                            },
+                            icon = { Icon(Icons.Default.Sync, null) }
+                        )
+                        NavigationDrawerItem(
+                            label = { Text(if (isDataTransferRunning) "Memproses data…" else "Export backup CSV") },
+                            selected = false,
+                            onClick = {
+                                if (!isDataTransferRunning) {
+                                    onExportData()
+                                    scope.launch { drawerState.close() }
+                                }
+                            },
+                            icon = { Icon(Icons.Default.FileDownload, null) }
+                        )
+                    }
                     if (canAccessAdminTabs) {
                         NavigationDrawerItem(
                             label = { Text("Import & gabungkan CSV") },
@@ -568,13 +594,15 @@ fun TokoDashboard(
                         onClick = onBackToTokoList,
                         icon = { Icon(Icons.Default.Store, null) }
                     )
-                    lastSyncResult?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    if (canAccessAdminTabs) {
+                        lastSyncResult?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
                     }
                 }
             }

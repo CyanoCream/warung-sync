@@ -1,10 +1,14 @@
 package com.warungsync.app.presentation.screen.itemlist
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Store
@@ -35,14 +40,23 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.graphics.Color
 import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.Item
@@ -57,6 +71,9 @@ import com.warungsync.app.presentation.components.ItemCard
 import com.warungsync.app.presentation.components.SearchAndFilterRow
 import com.warungsync.app.presentation.components.SearchBar
 import com.warungsync.app.presentation.screen.tokolist.RoleBadge
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +97,53 @@ fun ItemListScreen(
     searchOnly: Boolean = false
 ) {
     var selectedItemForDetail by remember { mutableStateOf<Item?>(null) }
+    val listState = rememberLazyListState()
+    val maxElasticOffset = with(LocalDensity.current) { 72.dp.toPx() }
+    var elasticOffset by remember { mutableFloatStateOf(0f) }
+    val elasticScrollConnection = remember(maxElasticOffset) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val isReturning = (elasticOffset > 0f && available.y < 0f) ||
+                    (elasticOffset < 0f && available.y > 0f)
+                if (!isReturning || source != NestedScrollSource.UserInput) return Offset.Zero
+
+                val consumedY = if (abs(available.y) >= abs(elasticOffset)) {
+                    -elasticOffset
+                } else {
+                    available.y
+                }
+                elasticOffset += consumedY
+                return Offset(0f, consumedY)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    elasticOffset = (elasticOffset + available.y * 0.45f)
+                        .coerceIn(-maxElasticOffset, maxElasticOffset)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (elasticOffset != 0f) {
+                    Animatable(elasticOffset).animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) {
+                        elasticOffset = value
+                    }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -177,7 +241,23 @@ fun ItemListScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(elasticScrollConnection)
+                        .graphicsLayer {
+                            val stretchFraction = if (size.height > 0) {
+                                abs(elasticOffset) / size.height
+                            } else {
+                                0f
+                            }
+                            translationY = elasticOffset * 0.75f
+                            scaleY = 1f + stretchFraction * 0.35f
+                            transformOrigin = TransformOrigin(
+                                pivotFractionX = 0.5f,
+                                pivotFractionY = if (elasticOffset >= 0f) 0f else 1f
+                            )
+                        },
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -185,6 +265,7 @@ fun ItemListScreen(
                         ItemCard(
                             item = item,
                             onItemClick = { selectedItemForDetail = item },
+                            modifier = Modifier.productScrollMotion(listState, item.id),
                             onEditClick = null,
                             onHistoryClick = { onHistoryClick(item) }
                         )
@@ -237,6 +318,42 @@ fun ItemListScreen(
                 TextButton(onClick = { selectedItemForDetail = null }) { Text("Tutup") }
             }
         )
+    }
+}
+
+private fun Modifier.productScrollMotion(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    itemKey: String
+): Modifier = graphicsLayer {
+    val layoutInfo = listState.layoutInfo
+    val visibleItem = layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey }
+    if (visibleItem == null || visibleItem.size <= 0) {
+        alpha = 0f
+        scaleX = 0.9f
+        scaleY = 0.9f
+    } else {
+        val visibleStart = max(visibleItem.offset, layoutInfo.viewportStartOffset)
+        val visibleEnd = min(
+            visibleItem.offset + visibleItem.size,
+            layoutInfo.viewportEndOffset
+        )
+        val visibleFraction = ((visibleEnd - visibleStart).toFloat() / visibleItem.size)
+            .coerceIn(0f, 1f)
+        val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+        val itemCenter = visibleItem.offset + visibleItem.size / 2f
+        val halfViewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset) / 2f
+        val centerProximity = if (halfViewport > 0f) {
+            (1f - abs(itemCenter - viewportCenter) / halfViewport).coerceIn(0f, 1f)
+        } else {
+            1f
+        }
+        val motionFraction = min(visibleFraction, 0.35f + centerProximity * 0.65f)
+        val easedFraction = FastOutSlowInEasing.transform(motionFraction)
+        alpha = 0.35f + 0.65f * easedFraction
+        val scale = 0.88f + 0.12f * easedFraction
+        scaleX = scale
+        scaleY = scale
+        transformOrigin = TransformOrigin.Center
     }
 }
 

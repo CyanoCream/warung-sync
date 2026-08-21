@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -453,23 +454,54 @@ fun MasterDataScreen(
 
     // Dialog Konfirmasi Hapus Kategori
     categoryToDelete?.let { category ->
+        val relatedItemCount = items.count { it.categoryId == category.id }
+        val categoryIsUsed = relatedItemCount > 0
         AlertDialog(
             onDismissRequest = { categoryToDelete = null },
-            title = { Text("Hapus Kategori?") },
-            text = { Text("Hapus kategori '${category.namaKategori}'? Kategori hanya bisa dihapus jika tidak ada barang terkait.") },
+            icon = {
+                if (categoryIsUsed) {
+                    Icon(
+                        imageVector = Icons.Default.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            title = {
+                Text(if (categoryIsUsed) "Kategori Masih Digunakan" else "Hapus Kategori?")
+            },
+            text = {
+                Text(
+                    if (categoryIsUsed) {
+                        "Kategori '${category.namaKategori}' tidak dapat dihapus karena masih digunakan oleh " +
+                            "$relatedItemCount produk. Pindahkan atau hapus produk tersebut terlebih dahulu."
+                    } else {
+                        "Hapus kategori '${category.namaKategori}'?"
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDeleteCategory(category.id)
+                        if (!categoryIsUsed) onDeleteCategory(category.id)
                         categoryToDelete = null
                     }
                 ) {
-                    Text("Hapus", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        text = if (categoryIsUsed) "Mengerti" else "Hapus",
+                        color = if (categoryIsUsed) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { categoryToDelete = null }) {
-                    Text("Batal")
+                if (!categoryIsUsed) {
+                    TextButton(onClick = { categoryToDelete = null }) {
+                        Text("Batal")
+                    }
                 }
             }
         )

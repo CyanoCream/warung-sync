@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +69,7 @@ import com.warungsync.app.domain.model.Category
 import com.warungsync.app.domain.model.SortBy
 import com.warungsync.app.presentation.util.formatThousandsInput
 import com.warungsync.app.presentation.util.parseThousandsInput
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -325,6 +327,11 @@ fun ProductFilterDrawer(
     }
     var tempSort by remember(currentSort) { mutableStateOf(currentSort) }
 
+    LaunchedEffect(tempMin, tempMax) {
+        delay(250)
+        onPriceRangeChanged(parseThousandsInput(tempMin), parseThousandsInput(tempMax))
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -352,6 +359,9 @@ fun ProductFilterDrawer(
                                     tempMin = ""
                                     tempMax = ""
                                     tempSort = SortBy.DATE_DESC
+                                    onCategorySelected(null)
+                                    onPriceRangeChanged(null, null)
+                                    onSortChanged(SortBy.DATE_DESC)
                                 }) { Text("Reset") }
                             }
 
@@ -363,7 +373,10 @@ fun ProductFilterDrawer(
                                 SortBy.entries.forEach { sort ->
                                     FilterChip(
                                         selected = tempSort == sort,
-                                        onClick = { tempSort = sort },
+                                        onClick = {
+                                            tempSort = sort
+                                            onSortChanged(sort)
+                                        },
                                         label = { Text(sort.label, style = MaterialTheme.typography.labelSmall) },
                                         modifier = Modifier.height(32.dp)
                                     )
@@ -379,14 +392,20 @@ fun ProductFilterDrawer(
                                 ) {
                                     FilterChip(
                                         selected = tempCategory == null,
-                                        onClick = { tempCategory = null },
+                                        onClick = {
+                                            tempCategory = null
+                                            onCategorySelected(null)
+                                        },
                                         label = { Text("Semua", style = MaterialTheme.typography.labelSmall) },
                                         modifier = Modifier.height(32.dp)
                                     )
                                     categories.forEach { category ->
                                         FilterChip(
                                             selected = tempCategory == category.id,
-                                            onClick = { tempCategory = category.id },
+                                            onClick = {
+                                                tempCategory = category.id
+                                                onCategorySelected(category.id)
+                                            },
                                             label = { Text(category.namaKategori, style = MaterialTheme.typography.labelSmall) },
                                             modifier = Modifier.height(32.dp)
                                         )
@@ -416,16 +435,12 @@ fun ProductFilterDrawer(
                                 )
                             }
 
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = {
-                                    onCategorySelected(tempCategory)
-                                    onPriceRangeChanged(parseThousandsInput(tempMin), parseThousandsInput(tempMax))
-                                    onSortChanged(tempSort)
-                                    scope.launch { drawerState.close() }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text("Terapkan") }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "Filter diterapkan otomatis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 }
